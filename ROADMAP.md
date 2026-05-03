@@ -112,7 +112,7 @@
 
 ### 0.6 Issue + PR templates + CODEOWNERS
 
-- [ ] Branch: `chore/templates`
+- [x] Branch: `chore/templates`
 - **Files:**
   - `.github/PULL_REQUEST_TEMPLATE.md` — sections: Linked task, Summary, Changes, Tests, Checklist (lint/typecheck/tests/coverage/docs/ROADMAP updated)
   - `.github/ISSUE_TEMPLATE/bug.yml` — structured form
@@ -120,8 +120,8 @@
   - `.github/ISSUE_TEMPLATE/config.yml` — disable blank issues
   - `.github/CODEOWNERS` — repo owner as default; granular paths can come later
 - **Acceptance:**
-  - [ ] Opening a new issue from GitHub UI shows bug/feature choice
-  - [ ] New PR auto-fills the template
+  - [x] Opening a new issue from GitHub UI shows bug/feature choice
+  - [x] New PR auto-fills the template
 
 ### 0.7 Dependency hygiene — Dependabot
 
