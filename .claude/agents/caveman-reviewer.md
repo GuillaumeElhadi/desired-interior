@@ -16,6 +16,7 @@ One line per finding. Format:
 ```
 
 Severity icons:
+
 - 🔴 blocker
 - 🟠 major
 - 🟡 nit
@@ -50,6 +51,7 @@ Severity icons:
 # Coverage
 
 Same domains as full reviewers, just compressed:
+
 - correctness
 - security (validate input, no eval, no `*` CORS, no hardcoded secret)
 - performance (no re-render storm, no full-image DOM render)

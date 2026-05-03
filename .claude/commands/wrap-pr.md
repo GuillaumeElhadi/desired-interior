@@ -34,22 +34,23 @@ Steps:
 6. Open the PR with `gh pr create`:
    - Title: `<type>(<scope>): <subject> [task X.Y]`
    - Body template:
+
      ```
      ## Linked task
      ROADMAP.md → X.Y
-     
+
      ## Summary
      <one-paragraph>
-     
+
      ## Changes
      - bullet list
-     
+
      ## Tests
      - what you added / what you ran
-     
+
      ## Acceptance criteria
      - [x] each criterion from ROADMAP, copied verbatim
-     
+
      ## Reviews
      <copy the architecture/security/design review summaries here, one section per agent>
      ```

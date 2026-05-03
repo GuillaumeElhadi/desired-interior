@@ -21,6 +21,7 @@ apps/api/
 ```
 
 Rules:
+
 - `domain/` imports nothing from `application/`, `infrastructure/`, or `api/`. Only stdlib + pydantic.
 - `application/` imports from `domain/` only. Defines protocols (ports). Never imports concrete adapters.
 - `infrastructure/` implements the ports. May import HTTP clients, fal SDK, file system.
@@ -51,7 +52,7 @@ Any import statement crossing these boundaries the wrong way is a 🔴 blocker.
   - a new framework or major library
   - a new architectural pattern (queue, event bus, plugin system, etc.)
   - a deviation from a documented decision
-  must include a new file in `docs/adr/` following the ADR template.
+    must include a new file in `docs/adr/` following the ADR template.
 - Missing ADR for a structural change → 🔴.
 
 ## 6. Test boundaries
@@ -69,16 +70,19 @@ A test in the wrong layer is a 🟡 unless it actually breaks (e.g., a domain te
 ## Architecture review — <branch>
 
 ### Boundary violations
-| Severity | Location | Rule violated | How to fix |
-| --- | --- | --- | --- |
-| 🔴 | infrastructure layer leak | api/routes/render.py:23 imports fal_client | Move call to fal_adapter, expose via port |
+
+| Severity | Location                  | Rule violated                              | How to fix                                |
+| -------- | ------------------------- | ------------------------------------------ | ----------------------------------------- |
+| 🔴       | infrastructure layer leak | api/routes/render.py:23 imports fal_client | Move call to fal_adapter, expose via port |
 
 ### Missing artifacts
+
 - [ ] ADR for <decision>
 - [ ] IPC.md entry for `POST /new-endpoint`
 - [ ] Regenerated `shared-types`
 
 ### ✅ Respected
+
 - domain/ has no infrastructure imports
 - shared types match pydantic models
 ```
