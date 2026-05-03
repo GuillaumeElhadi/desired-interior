@@ -1,0 +1,62 @@
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
+  # --- General file hygiene ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # --- Python: ruff format + lint ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: \.py$
+      - id: ruff-format
+        files: \.py$
+
+  # --- Secret detection ---
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # --- Local hooks (use pnpm node_modules — requires `make setup` / `pnpm install` first) ---
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        language: system
+        entry: node_modules/.bin/prettier --write
+        types_or: [ts, tsx, javascript, jsx, json, markdown, yaml]
+
+      # eslint: gated on apps/desktop/src/ — skipped until task 1.1 creates the frontend.
+      # Add TypeScript eslint plugins to devDependencies at that point.
+      - id: eslint
+        name: eslint (frontend)
+        language: system
+        entry: node_modules/.bin/eslint --fix
+        files: ^apps/desktop/src/
+        types_or: [ts, tsx, javascript, jsx]
+
+      - id: rustfmt
+        name: rustfmt
+        language: system
+        entry: rustfmt
+        args: [--edition, "2021"]
+        types: [rust]
+
+      - id: commitlint
+        name: commitlint
+        language: system
+        entry: node_modules/.bin/commitlint --edit
+        stages: [commit-msg]

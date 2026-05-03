@@ -1,0 +1,16 @@
+{
+  "name": "interior-vision",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint apps/desktop/src"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.5.3",
+    "eslint": "^10.3.0",
+    "prettier": "^3.8.3"
+  }
+}

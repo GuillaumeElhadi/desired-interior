@@ -54,6 +54,7 @@ See `docs/adr/` for fuller rationale on each decision.
 ## Conventions
 
 ### Branches
+
 - `feat/<short-kebab>` — new feature
 - `fix/<short-kebab>` — bug fix
 - `chore/<short-kebab>` — tooling, deps, infra
@@ -61,6 +62,7 @@ See `docs/adr/` for fuller rationale on each decision.
 - `refactor/<short-kebab>` — no behavior change
 
 ### Commits — Conventional Commits, enforced by commitlint
+
 Format: `<type>(<scope>): <subject>`
 
 - Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`
@@ -68,11 +70,13 @@ Format: `<type>(<scope>): <subject>`
 - Breaking changes: `feat(api)!: ...` or footer `BREAKING CHANGE: ...`
 
 Examples:
+
 - `feat(desktop): add room photo upload screen`
 - `fix(api): handle fal.ai timeout gracefully`
 - `chore(deps): bump tauri to 2.1`
 
 ### Pull Requests
+
 - One ROADMAP task = one branch = one PR. No bundling.
 - PR title: `<type>(<scope>): <subject> [task X.Y]`
 - PR description must reference the task ID and check the acceptance criteria.
@@ -80,6 +84,7 @@ Examples:
 - Squash-merge to keep `main` linear.
 
 ### Tests
+
 - Every feature ships with tests in the same PR.
 - Coverage gate: 70% lines, configured in CI.
 - Frontend: Vitest (unit) + Playwright (Tauri e2e where relevant).

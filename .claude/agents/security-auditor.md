@@ -72,7 +72,7 @@ The Tauri 2 capabilities system replaces the v1 allowlist. The principle: **the 
 
 - **SSRF via image URLs**: if the API ever fetches an image from a URL provided by the frontend (e.g., to forward to fal.ai), the URL must be validated against a host allowlist. An attacker uploading `http://169.254.169.254/...` (cloud metadata endpoint) is the classic SSRF.
 - **Prompt injection in user content**: if any user-provided text reaches a model as part of a prompt, document the trust boundary in `docs/security/`.
-- **Cache poisoning**: scene/object preprocessing cache keyed on hash of content. Verify the hash is of the *bytes*, not of a filename.
+- **Cache poisoning**: scene/object preprocessing cache keyed on hash of content. Verify the hash is of the _bytes_, not of a filename.
 
 ## 8. Data privacy
 
@@ -92,12 +92,14 @@ The Tauri 2 capabilities system replaces the v1 allowlist. The principle: **the 
 ## Security review — <branch or PR>
 
 ### Summary
+
 - N blockers, M majors, K minors
 - Verdict: BLOCK / REQUEST CHANGES / APPROVE
 
 ### Findings
-| Severity | CWE/Class | Location | Issue | Recommended fix |
-| --- | --- | --- | --- | --- |
+
+| Severity   | CWE/Class             | Location                | Issue                      | Recommended fix                              |
+| ---------- | --------------------- | ----------------------- | -------------------------- | -------------------------------------------- |
 | 🔴 blocker | CWE-22 Path traversal | api/routes/upload.py:34 | `path` param not validated | resolve + check is_relative_to(allowed_root) |
 ```
 
