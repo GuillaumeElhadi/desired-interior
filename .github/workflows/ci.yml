@@ -1,0 +1,231 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # lint: prettier (always), eslint/ruff/cargo (conditional on app existence)
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: prettier --check
+        run: pnpm format:check
+
+      - name: eslint
+        if: hashFiles('apps/desktop/package.json') != ''
+        run: pnpm lint
+
+      - name: Set up uv
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: ruff check + format check
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        working-directory: apps/api
+        run: |
+          uv sync
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Set up Rust
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: cargo fmt --check
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
+
+      - name: cargo clippy
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
+
+  # ---------------------------------------------------------------------------
+  # typecheck: skipped until apps/desktop is scaffolded (task 1.1)
+  # ---------------------------------------------------------------------------
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm -r typecheck
+        if: hashFiles('apps/desktop/package.json') != ''
+        run: pnpm -r typecheck
+
+  # ---------------------------------------------------------------------------
+  # test-frontend: skipped until apps/desktop is scaffolded (task 1.1)
+  # ---------------------------------------------------------------------------
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: vitest --coverage
+        id: vitest
+        if: hashFiles('apps/desktop/package.json') != ''
+        run: pnpm --filter desktop test --coverage --run
+
+      - name: Coverage report (PR comment)
+        if: steps.vitest.outcome == 'success' && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: apps/desktop
+
+  # ---------------------------------------------------------------------------
+  # test-backend: skipped until apps/api is scaffolded (task 1.2)
+  # ---------------------------------------------------------------------------
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: pytest --cov
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        working-directory: apps/api
+        run: |
+          uv sync
+          uv run pytest --cov --cov-report=term-missing --cov-fail-under=70
+
+  # ---------------------------------------------------------------------------
+  # test-tauri: skipped until apps/desktop/src-tauri is scaffolded (task 1.3)
+  # ---------------------------------------------------------------------------
+  test-tauri:
+    name: Test Tauri (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: cargo test
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
+
+  # ---------------------------------------------------------------------------
+  # coverage-gate: passes if both test jobs passed or were skipped
+  # Once apps exist, test jobs enforce per-tool thresholds (vitest / pytest).
+  # ---------------------------------------------------------------------------
+  coverage-gate:
+    name: Coverage Gate
+    needs: [test-frontend, test-backend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate test results
+        run: |
+          frontend="${{ needs.test-frontend.result }}"
+          backend="${{ needs.test-backend.result }}"
+          echo "test-frontend: $frontend"
+          echo "test-backend:  $backend"
+          if [[ "$frontend" == "failure" || "$backend" == "failure" ]]; then
+            echo "::error::One or more test jobs failed — coverage gate not met"
+            exit 1
+          fi
+          echo "Coverage gate passed (tests passed or skipped — apps not yet scaffolded)"
+
+  # ---------------------------------------------------------------------------
+  # build-check: macOS Apple Silicon — skipped until src-tauri exists (task 1.3)
+  # ---------------------------------------------------------------------------
+  build-check:
+    name: Build Check (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Set up Rust
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm tauri build --debug
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        working-directory: apps/desktop
+        run: pnpm tauri build --debug

@@ -78,7 +78,7 @@
 
 ### 0.4 CI pipeline — PR gate
 
-- [ ] Branch: `chore/ci-pr-gate`
+- [x] Branch: `chore/ci-pr-gate`
 - **File:** `.github/workflows/ci.yml`
 - **Triggers:** `pull_request`, `push` to non-`main` branches
 - **Concurrency:** cancel in-progress on new push for same ref
