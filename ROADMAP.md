@@ -22,7 +22,7 @@
 > Goal: a repository where every PR is automatically validated, every commit is well-formed, and releases happen by themselves. **No feature code in this phase.**
 
 ### 0.1 Initialize repository
-- [ ] Branch: `chore/init-repo`
+- [x] Branch: `chore/init-repo`
 - **Steps:**
   - `gh repo create interior-vision --private --source=. --remote=origin`
   - Add minimal `README.md` (one-paragraph pitch + status badge placeholder + stack)
@@ -31,9 +31,9 @@
   - Commit `CLAUDE.md` and `ROADMAP.md` (this file)
   - Create empty directories with `.gitkeep`: `apps/desktop`, `apps/api`, `packages/shared-types`, `docs/adr`
 - **Acceptance:**
-  - [ ] Repo cloneable from GitHub
-  - [ ] `main` is the default branch
-  - [ ] Initial commit message is `chore: initial repository setup`
+  - [x] Repo cloneable from GitHub
+  - [x] `main` is the default branch
+  - [x] Initial commit message is `chore: initial repository setup` *(actual: `chore: initial repository setup with Claude Code workspace` — pre-dated this task; message follows Conventional Commits)*
 
 ### 0.2 Branch protection on `main`
 - [ ] Branch: `chore/branch-protection` (or done from GitHub UI then committed as a doc)
