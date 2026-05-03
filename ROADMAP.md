@@ -36,7 +36,7 @@
   - [x] Initial commit message is `chore: initial repository setup` *(actual: `chore: initial repository setup with Claude Code workspace` — pre-dated this task; message follows Conventional Commits)*
 
 ### 0.2 Branch protection on `main`
-- [ ] Branch: `chore/branch-protection` (or done from GitHub UI then committed as a doc)
+- [x] Branch: `chore/branch-protection` (or done from GitHub UI then committed as a doc)
 - **Steps:**
   - Configure via `gh api` or repo settings:
     - Require PR before merging
@@ -49,8 +49,8 @@
     - Block deletions
   - Document the configuration in `docs/adr/0001-branch-protection.md`
 - **Acceptance:**
-  - [ ] `git push origin main` from a fresh clone is rejected
-  - [ ] ADR present and dated
+  - [x] `git push origin main` from a fresh clone is rejected
+  - [x] ADR present and dated
 
 ### 0.3 Pre-commit framework + commitlint
 - [ ] Branch: `chore/pre-commit`
