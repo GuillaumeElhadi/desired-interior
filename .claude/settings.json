@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Project-level Claude Code settings for Interior Vision. Commit this file. Do NOT commit user-level overrides (place those in ~/.claude/settings.json).",
+
+  "permissions": {
+    "_comment": "Auto-approved commands run without prompting. Keep this list minimal and READ-ONLY where possible.",
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm codegen:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(pre-commit run:*)",
+      "Read(./**)",
+      "Grep(./**)",
+      "Glob(./**)"
+    ],
+    "deny": [
+      "Bash(git push origin main:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(rm -rf:*)",
+      "Bash(curl:* | sh)",
+      "Bash(curl:* | bash)",
+      "Bash(*--no-verify*)"
+    ],
+    "ask": [
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh release create:*)",
+      "Bash(git push:*)",
+      "Bash(pnpm tauri build:*)",
+      "Write(./.github/**)",
+      "Write(./.claude/**)"
+    ]
+  },
+
+  "hooks": {
+    "_comment": "Auto-format after Edit/Write to avoid wasting turns on formatting churn.",
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$CLAUDE_FILE_PATH\"; case \"$f\" in *.ts|*.tsx|*.js|*.jsx|*.json|*.md|*.yml|*.yaml) pnpm exec prettier --write \"$f\" 2>/dev/null || true ;; *.py) (cd apps/api 2>/dev/null && uv run ruff format \"$f\" 2>/dev/null) || true ;; *.rs) rustfmt \"$f\" 2>/dev/null || true ;; esac'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cmd=\"$CLAUDE_TOOL_INPUT_command\"; if echo \"$cmd\" | grep -qE \"git push.*origin.*main|git push.*--force|--no-verify\"; then echo \"BLOCKED: forbidden git operation\" >&2; exit 1; fi; exit 0'"
+          }
+        ]
+      }
+    ]
+  },
+
+  "mcpServers": {
+    "_comment": "Context7 fetches version-specific docs on demand. Trigger with 'use context7' in prompts, or by referencing a library by name. GitHub server requires GITHUB_PERSONAL_ACCESS_TOKEN in your shell env.",
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    }
+  }
+}
