@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Describe it below. The more context you provide, the easier it is to evaluate.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the pain point or use case driving this request.
+      placeholder: "I'm trying to do X but currently I have to Y, which is tedious because..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to see? How should it work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you thought about?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Canvas / placement
+        - Rendering / ML quality
+        - UI / UX
+        - Performance
+        - Import / export
+        - Settings
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, mockups, references, or anything else useful.
+    validations:
+      required: false
