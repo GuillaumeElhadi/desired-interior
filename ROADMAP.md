@@ -98,7 +98,7 @@
 
 ### 0.5 Release-please
 
-- [ ] Branch: `chore/release-please`
+- [x] Branch: `chore/release-please`
 - **Files:**
   - `.github/workflows/release-please.yml` (triggers on push to `main`)
   - `release-please-config.json` — manifest mode, single component, `release-type: simple`, generate `CHANGELOG.md`, tag format `v${version}`
@@ -107,8 +107,8 @@
   - Create a GitHub App or fine-grained PAT with `contents:write` + `pull_requests:write`, store as `RELEASE_PLEASE_TOKEN`
   - Configure release-please to bump version in `apps/desktop/src-tauri/tauri.conf.json` and `apps/desktop/package.json` and `apps/api/pyproject.toml` via `extra-files`
 - **Acceptance:**
-  - [ ] After this PR merges, no release PR is opened (no feat/fix yet)
-  - [ ] Document the release flow in `docs/adr/0002-release-strategy.md`
+  - [x] After this PR merges, no release PR is opened (no feat/fix yet)
+  - [x] Document the release flow in `docs/adr/0002-release-strategy.md`
 
 ### 0.6 Issue + PR templates + CODEOWNERS
 

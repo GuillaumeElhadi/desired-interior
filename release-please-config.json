@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "changelog-path": "CHANGELOG.md",
+  "tag-name-pattern": "v${version}",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "draft": false,
+  "prerelease": false,
+  "extra-files": [
+    "apps/desktop/package.json",
+    {
+      "type": "toml",
+      "path": "apps/api/pyproject.toml",
+      "jsonpath": "$.project.version"
+    },
+    {
+      "type": "json",
+      "path": "apps/desktop/src-tauri/tauri.conf.json",
+      "jsonpath": "$.version"
+    }
+  ]
+}
