@@ -78,7 +78,7 @@
 
 ### 0.4 CI pipeline — PR gate
 
-- [ ] Branch: `chore/ci-pr-gate`
+- [x] Branch: `chore/ci-pr-gate`
 - **File:** `.github/workflows/ci.yml`
 - **Triggers:** `pull_request`, `push` to non-`main` branches
 - **Concurrency:** cancel in-progress on new push for same ref
@@ -92,9 +92,9 @@
   - `build-check` — `pnpm tauri build --debug` on `macos-14` (Apple Silicon runner)
 - **Caching:** pnpm store, uv cache, cargo registry + target
 - **Acceptance:**
-  - [ ] Open a draft PR with a trivial change → all jobs run and pass
-  - [ ] All jobs added to required status checks (update branch protection)
-  - [ ] CI runs in under 10 minutes on a small change (cache hit path)
+  - [x] Open a draft PR with a trivial change → all jobs run and pass
+  - [x] All jobs added to required status checks (update branch protection)
+  - [x] CI runs in under 10 minutes on a small change (cache hit path)
 
 ### 0.5 Release-please
 
