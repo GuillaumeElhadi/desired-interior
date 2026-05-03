@@ -40,8 +40,10 @@
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(rm -rf:*)",
-      "Bash(curl:* | sh)",
-      "Bash(curl:* | bash)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
       "Bash(*--no-verify*)"
     ],
     "ask": [
@@ -56,7 +58,6 @@
   },
 
   "hooks": {
-    "_comment": "Auto-format after Edit/Write to avoid wasting turns on formatting churn.",
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
@@ -85,18 +86,18 @@
     "_comment": "Context7 fetches version-specific docs on demand. Trigger with 'use context7' in prompts, or by referencing a library by name. GitHub server requires GITHUB_PERSONAL_ACCESS_TOKEN in your shell env.",
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"]
+      "args": ["-y", "@upstash/context7-mcp@2.2.3"]
     },
     "github": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
     },
     "sequential-thinking": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking@2025.12.18"]
     }
   }
 }

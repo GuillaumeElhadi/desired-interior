@@ -1,0 +1,65 @@
+# Node
+node_modules/
+dist/
+.vite/
+.turbo/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg
+
+# Rust / Tauri
+target/
+# Cargo.lock is intentionally kept for apps (binary crates)
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.icloud
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Apple Developer / notarization (Phase 5)
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+AuthKey_*.p8
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+*.app
+*.dmg
+*.pkg
+*.deb
+*.AppImage
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Claude Code (user-local overrides — not project files)
+.claude/settings.local.json
