@@ -125,12 +125,12 @@
 
 ### 0.7 Dependency hygiene — Dependabot
 
-- [ ] Branch: `chore/dependabot`
+- [x] Branch: `chore/dependabot`
 - **File:** `.github/dependabot.yml`
 - **Ecosystems:** `npm`, `pip` (and/or `uv`), `cargo`, `github-actions`
 - **Config:** weekly schedule, group minor+patch updates per ecosystem, allow up to 5 open PRs per ecosystem, target `main`
 - **Acceptance:**
-  - [ ] Dependabot opens at least one update PR within a week (or manually triggered to verify)
+  - [x] Dependabot opens at least one update PR within a week (or manually triggered to verify)
 
 ### 0.8 Security baseline
 
