@@ -23,10 +23,11 @@ Upload a photo of your room and one or more furniture or decor images — Interi
 ## Development setup
 
 ```bash
-# Prerequisites: Node 20+, pnpm, Python 3.12+, uv, Rust + cargo
+# Prerequisites: Node 22 (see .nvmrc), pnpm, Python 3.12+, uv, Rust + cargo
 
 git clone https://github.com/GuillaumeElhadi/desired-interior.git
 cd desired-interior
+nvm use           # switches to Node 22 (from .nvmrc)
 make setup        # installs pnpm deps + pre-commit hooks
 ```
 

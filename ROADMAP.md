@@ -181,14 +181,14 @@
 
 ### 1.1 Tauri + React + Vite scaffold
 
-- [ ] Branch: `feat/desktop-scaffold`
+- [x] Branch: `feat/desktop-scaffold`
 - Use `pnpm create tauri-app` with React + TS + Vite template, place in `apps/desktop/`
 - Add Tailwind, configure paths, add a single placeholder screen ("Interior Vision — Hello")
 - Configure Vitest + Testing Library, write one trivial test
 - **Acceptance:**
-  - [ ] `pnpm tauri dev` opens a window on macOS
-  - [ ] `pnpm tauri build` produces a `.app` bundle
-  - [ ] CI build-check passes
+  - [x] `pnpm tauri dev` opens a window on macOS
+  - [x] `pnpm tauri build` produces a `.app` bundle
+  - [x] CI build-check passes
 
 ### 1.2 Python FastAPI sidecar scaffold
 

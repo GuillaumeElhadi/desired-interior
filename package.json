@@ -8,6 +8,11 @@
     "format:check": "prettier --check .",
     "lint": "eslint apps/desktop/src"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
