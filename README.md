@@ -49,6 +49,10 @@ every fresh clone or when `.pre-commit-config.yaml` changes.
 
 See [`CLAUDE.md`](CLAUDE.md) for full project conventions and task workflow.
 
+## Security
+
+See [`SECURITY.md`](SECURITY.md) for the vulnerability disclosure policy.
+
 ## License
 
 [MIT](LICENSE)

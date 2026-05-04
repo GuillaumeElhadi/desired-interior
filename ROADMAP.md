@@ -134,7 +134,7 @@
 
 ### 0.8 Security baseline
 
-- [ ] Branch: `chore/security`
+- [x] Branch: `chore/security`
 - **Files:**
   - `.github/workflows/codeql.yml` — CodeQL for `javascript-typescript`, `python`. Schedule weekly + on PR to `main`.
   - `SECURITY.md` — disclosure policy, contact
@@ -143,8 +143,8 @@
   - Enable Dependabot alerts
   - Enable private vulnerability reporting
 - **Acceptance:**
-  - [ ] CodeQL job runs and passes on a PR
-  - [ ] `SECURITY.md` linked from README
+  - [x] CodeQL job runs and passes on a PR
+  - [x] `SECURITY.md` linked from README
 
 ### 0.9 Claude Code workspace setup
 
