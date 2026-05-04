@@ -4,3 +4,4 @@ setup: ## Install dev dependencies and git hooks
 	pnpm install
 	pre-commit install
 	pre-commit install --hook-type commit-msg
+	pre-commit install --hook-type pre-push

@@ -1,4 +1,4 @@
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 
 repos:
@@ -60,3 +60,10 @@ repos:
         language: system
         entry: node_modules/.bin/commitlint --edit
         stages: [commit-msg]
+
+      - id: frontend-tests
+        name: frontend tests (vitest)
+        language: system
+        entry: bash -c 'if [ -f apps/desktop/node_modules/.bin/vitest ]; then pnpm --filter "./apps/desktop" test:run; fi'
+        pass_filenames: false
+        stages: [pre-push]
