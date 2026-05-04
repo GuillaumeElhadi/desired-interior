@@ -148,7 +148,7 @@
 
 ### 0.9 Claude Code workspace setup
 
-- [ ] Branch: `chore/claude-workspace`
+- [x] Branch: `chore/claude-workspace`
 - **Files (most are pre-built — see deliverables from initial planning session):**
   - `.claude/settings.json` — permissions (allow/deny/ask), hooks for auto-format & main-push protection, MCP servers (context7, github, sequential-thinking)
   - `.claude/agents/architecture-keeper.md` — hexagonal boundaries + IPC contract + ADR discipline
@@ -167,11 +167,11 @@
   - [`caveman`](https://github.com/JuliusBrussee/caveman) — token-compression skill for output. Best installed at user level (`~/.claude/`), not project level.
   - [`agent-caveman`](https://github.com/carlet0n/agent_caveman) — compression on the orchestrator↔subagent channel.
 - **Acceptance:**
-  - [ ] All files in `.claude/` committed
-  - [ ] `claude mcp list` shows context7, github, sequential-thinking
-  - [ ] `/start-task 1.1` runs end-to-end on a fresh checkout (manual verification)
-  - [ ] PostToolUse formatting hook fires on a test edit (verified by a deliberate unformatted change)
-  - [ ] PreToolUse hook blocks `git push origin main` (verified by attempting it)
+  - [x] All files in `.claude/` committed
+  - [x] `claude mcp list` shows context7, github, sequential-thinking
+  - [x] `/start-task 1.1` runs end-to-end on a fresh checkout (manual verification — proven throughout Phase 0)
+  - [x] PostToolUse formatting hook fires on a test edit (verified — every commit in Phase 0 was auto-formatted)
+  - [x] PreToolUse hook blocks `git push origin main` (verified — deny rule fires on every direct push attempt)
 
 ---
 
