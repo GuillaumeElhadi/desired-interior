@@ -192,14 +192,14 @@
 
 ### 1.2 Python FastAPI sidecar scaffold
 
-- [ ] Branch: `feat/api-scaffold`
+- [x] Branch: `feat/api-scaffold`
 - Set up `apps/api/` with `uv init`, FastAPI, uvicorn, pydantic-settings, structlog
 - Single endpoint: `GET /health` returning `{"status": "ok", "version": "..."}`
 - pytest + httpx test for the endpoint
 - `pyproject.toml` with ruff config (line-length 100, target-version py312)
 - **Acceptance:**
-  - [ ] `uv run uvicorn app.main:app` starts and responds to `/health`
-  - [ ] Tests pass with coverage > 80% on this small surface
+  - [x] `uv run uvicorn app.main:app` starts and responds to `/health`
+  - [x] Tests pass with coverage > 80% on this small surface
 
 ### 1.3 Tauri sidecar integration
 
