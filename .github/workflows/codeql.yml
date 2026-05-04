@@ -17,32 +17,41 @@ permissions:
   actions: read
 
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
+  # JavaScript / TypeScript — always runs
+  analyze-js:
+    name: Analyze (javascript)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        language:
-          - javascript # covers TypeScript too
-          - python
-        include:
-          - language: javascript
-            build-mode: none
-          - language: python
-            build-mode: none
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          languages: javascript
+          build-mode: none
           queries: security-and-quality
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:${{ matrix.language }}"
+          category: /language:javascript
+
+  # Python — skipped until apps/api is scaffolded (task 1.2)
+  analyze-python:
+    name: Analyze (python)
+    runs-on: ubuntu-latest
+    if: hashFiles('apps/api/**/*.py') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          build-mode: none
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:python
