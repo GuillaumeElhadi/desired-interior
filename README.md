@@ -7,7 +7,7 @@ Upload a photo of your room and one or more furniture or decor images — Interi
 
 ## Status
 
-🚧 Early development — Phase 0 (foundation) in progress.
+🚧 Early development — Phase 1 (skeleton) in progress.
 
 ## Stack
 
@@ -47,6 +47,31 @@ every fresh clone or when `.pre-commit-config.yaml` changes.
 | `rustfmt`                                          | Rust formatting (skipped until `apps/desktop/src-tauri/` exists)                      |
 | `gitleaks`                                         | Secret detection — blocks commits containing API keys, tokens, etc.                   |
 | `commitlint`                                       | Enforces [Conventional Commits](https://www.conventionalcommits.org/) on `commit-msg` |
+
+### Running the desktop app locally
+
+```bash
+nvm use                          # Node 22 required (Vite 8 / Vitest 4)
+cd apps/desktop
+
+# Full Tauri app (native window + frontend hot-reload)
+pnpm tauri dev
+
+# Frontend only (browser, no native window)
+pnpm dev
+
+# Tests
+pnpm test          # watch mode
+pnpm test:run      # single run
+pnpm coverage      # single run with coverage report
+
+# Type-check + lint
+pnpm typecheck
+pnpm lint
+```
+
+> **First run**: `pnpm tauri dev` compiles the Rust crate on first launch (~1 min on Apple Silicon).
+> Subsequent runs use the incremental build cache and start in a few seconds.
 
 See [`CLAUDE.md`](CLAUDE.md) for full project conventions and task workflow.
 
