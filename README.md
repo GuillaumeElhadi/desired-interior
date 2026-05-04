@@ -48,6 +48,18 @@ every fresh clone or when `.pre-commit-config.yaml` changes.
 | `gitleaks`                                         | Secret detection — blocks commits containing API keys, tokens, etc.                   |
 | `commitlint`                                       | Enforces [Conventional Commits](https://www.conventionalcommits.org/) on `commit-msg` |
 
+### Running the Python API locally
+
+```bash
+cd apps/api
+uv sync                                  # install deps into .venv
+uv run uvicorn app.main:app --reload     # starts on http://localhost:8000
+# test: curl http://localhost:8000/health
+
+uv run pytest                            # tests + coverage report
+uv run ruff check .                      # lint
+```
+
 ### Running the desktop app locally
 
 ```bash
