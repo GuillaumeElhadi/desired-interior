@@ -125,7 +125,7 @@ jobs:
       - name: vitest --coverage
         id: vitest
         if: hashFiles('apps/desktop/package.json') != ''
-        run: pnpm --filter desktop coverage
+        run: pnpm --filter "./apps/desktop" coverage
 
       - name: Coverage report (PR comment)
         if: steps.vitest.outcome == 'success' && github.event_name == 'pull_request'
