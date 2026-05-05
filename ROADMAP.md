@@ -215,13 +215,13 @@
 
 ### 1.4 Shared types codegen
 
-- [ ] Branch: `feat/shared-types`
+- [x] Branch: `feat/shared-types`
 - Use `datamodel-code-generator` or `pydantic-to-typescript` to generate TS types from pydantic models in `apps/api`
 - Output to `packages/shared-types/`, consumed by `apps/desktop`
 - Add a `pnpm codegen` script and CI check that fails if generated types are stale
 - **Acceptance:**
-  - [ ] Modifying a pydantic model and running `pnpm codegen` updates the TS file
-  - [ ] CI fails if codegen is not run
+  - [x] Modifying a pydantic model and running `pnpm codegen` updates the TS file
+  - [x] CI fails if codegen is not run
 
 ### 1.5 Logging + structured errors
 

@@ -2,6 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.main import app as fastapi_app
+
 
 def test_main_default_args(monkeypatch):
     monkeypatch.setattr("sys.argv", ["prog"])
@@ -11,7 +13,7 @@ def test_main_default_args(monkeypatch):
 
         main()
     mock_run.assert_called_once_with(
-        "app.main:app", host="127.0.0.1", port=8000, reload=False, log_config=None
+        fastapi_app, host="127.0.0.1", port=8000, reload=False, log_config=None
     )
 
 
@@ -23,7 +25,7 @@ def test_main_custom_port(monkeypatch):
 
         main()
     mock_run.assert_called_once_with(
-        "app.main:app", host="127.0.0.1", port=9876, reload=False, log_config=None
+        fastapi_app, host="127.0.0.1", port=9876, reload=False, log_config=None
     )
 
 

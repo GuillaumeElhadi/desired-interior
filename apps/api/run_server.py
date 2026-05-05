@@ -3,6 +3,8 @@ import sys
 
 import uvicorn
 
+from app.main import app
+
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1"}
 
 
@@ -14,7 +16,7 @@ def main() -> None:
     if args.host not in _LOOPBACK_HOSTS:
         print(f"error: --host must be a loopback address, got {args.host!r}", file=sys.stderr)
         sys.exit(1)
-    uvicorn.run("app.main:app", host=args.host, port=args.port, reload=False, log_config=None)
+    uvicorn.run(app, host=args.host, port=args.port, reload=False, log_config=None)
 
 
 if __name__ == "__main__":

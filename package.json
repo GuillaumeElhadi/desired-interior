@@ -6,7 +6,8 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint apps/desktop/src"
+    "lint": "eslint apps/desktop/src",
+    "codegen": "(cd apps/api && uv run python export_schema.py) > packages/shared-types/openapi.json && prettier --write packages/shared-types/openapi.json && openapi-typescript packages/shared-types/openapi.json -o packages/shared-types/src/index.ts && prettier --write packages/shared-types/src/index.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -17,6 +18,7 @@
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
     "eslint": "^10.3.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3"
   }
 }

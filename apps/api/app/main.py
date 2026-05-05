@@ -4,11 +4,19 @@ import os
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.schemas import HealthResponse
+
 app = FastAPI(title="Interior Vision API")
 
-_ALLOWED_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]
-if os.getenv("DEBUG"):
-    _ALLOWED_ORIGINS.append("http://localhost:5173")
+# tauri://localhost — production webview origin
+# http://tauri.localhost — alternate production origin (Windows/Linux)
+# http://localhost:5173 — Vite dev server origin (pnpm tauri dev)
+# The IPC token is the real auth boundary; allowing loopback origins is safe.
+_ALLOWED_ORIGINS = [
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "http://localhost:5173",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,9 +36,9 @@ async def _verify_ipc_token(authorization: str | None = Header(default=None)) ->
 
 
 @app.get("/health", dependencies=[Depends(_verify_ipc_token)])
-def health() -> dict[str, str]:
+def health() -> HealthResponse:
     try:
         version = importlib.metadata.version("interior-vision-api")
     except importlib.metadata.PackageNotFoundError:
         version = "0.0.0"
-    return {"status": "ok", "version": version}
+    return HealthResponse(status="ok", version=version)
