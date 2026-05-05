@@ -36,11 +36,9 @@ jobs:
         with:
           category: /language:javascript
 
-  # Python — skipped until apps/api is scaffolded (task 1.2)
   analyze-python:
     name: Analyze (python)
     runs-on: ubuntu-latest
-    if: hashFiles('apps/api/**/*.py') != ''
     steps:
       - uses: actions/checkout@v4
 
