@@ -12,17 +12,19 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 | `RunEvent::ExitRequested` | Rust calls `CommandChild::kill()` on the stored handle                                                                                                                  |
 | Sidecar crash             | `CommandChild` handle becomes invalid; frontend HTTP calls fail with a network error (surfaced as an error state in the UI)                                             |
 
-## Tauri command
+## Tauri commands
 
-```
-api_base_url() → Result<String, String>
-```
+### `api_base_url() → Result<String, String>`
 
 - **Rust definition:** `apps/desktop/src-tauri/src/lib.rs`
 - **JS binding:** `invoke("api_base_url")` via `@tauri-apps/api/core`
 - **Frontend wrapper:** `getApiBaseUrl()` in `apps/desktop/src/lib/api.ts`
 - **Returns:** `"http://127.0.0.1:<port>"` where `<port>` is the ephemeral port chosen at startup
-- **Error:** Returns `Err("sidecar not yet started")` if called before `setup()` completes (should not happen in normal flow)
+
+### `ipc_token() → Result<String, String>`
+
+- **JS binding:** `invoke("ipc_token")` via `@tauri-apps/api/core`
+- **Returns:** The 128-bit random hex token generated at startup. Must be sent as `Authorization: Bearer <token>` on every HTTP request to the sidecar.
 
 ## HTTP endpoints
 
@@ -35,9 +37,10 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
 ## Security model
 
 - Sidecar binds only to `127.0.0.1`. No external network exposure.
-- No authentication on the sidecar HTTP API — loopback binding is the security boundary.
-- The Tauri webview origin is `tauri://localhost`, not a browser HTTP origin, so standard CORS does not apply.
+- **IPC token**: Rust generates a 128-bit random token at startup (`/dev/urandom`), passes it to the sidecar via `IPC_TOKEN` env var. All routes verify `Authorization: Bearer <token>`. Token is exposed to the frontend only via `invoke("ipc_token")` (not in the DOM or localStorage).
+- **CORS**: Sidecar allows only `tauri://localhost` (and `http://localhost:5173` when `DEBUG` env var is set). Cross-origin browser tabs cannot access the API.
 - The capability `shell:allow-execute` in `capabilities/default.json` is scoped to `interior-vision-api` with `sidecar: true`, preventing execution of arbitrary binaries.
+- **Dev mode**: When `IPC_TOKEN` is not set (e.g., running `uv run uvicorn` directly), auth is skipped so the dev workflow is unaffected.
 
 ## Adding new endpoints
 

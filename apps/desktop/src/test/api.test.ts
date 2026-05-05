@@ -7,6 +7,14 @@ import { checkHealth, getApiBaseUrl } from "../lib/api";
 
 const mockInvoke = vi.mocked(invoke);
 
+function setupInvokeMocks() {
+  mockInvoke.mockImplementation((cmd: unknown) => {
+    if (cmd === "api_base_url") return Promise.resolve("http://127.0.0.1:9999");
+    if (cmd === "ipc_token") return Promise.resolve("test-token");
+    return Promise.reject(new Error(`unknown command: ${String(cmd)}`));
+  });
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe("getApiBaseUrl", () => {
@@ -18,20 +26,22 @@ describe("getApiBaseUrl", () => {
 });
 
 describe("checkHealth", () => {
-  it("fetches /health and returns parsed body", async () => {
-    mockInvoke.mockResolvedValue("http://127.0.0.1:9999");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ status: "ok", version: "0.0.0" }),
-      })
-    );
+  it("fetches /health with auth header and returns parsed body", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: "ok", version: "0.0.0" }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
     expect(await checkHealth()).toEqual({ status: "ok", version: "0.0.0" });
+    expect(mockFetch).toHaveBeenCalledWith("http://127.0.0.1:9999/health", {
+      headers: { Authorization: "Bearer test-token" },
+    });
   });
 
   it("throws on non-ok response", async () => {
-    mockInvoke.mockResolvedValue("http://127.0.0.1:9999");
+    setupInvokeMocks();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
     await expect(checkHealth()).rejects.toThrow("health check failed: 503");
   });
