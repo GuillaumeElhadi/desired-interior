@@ -63,3 +63,11 @@ htmlcov/
 
 # Claude Code (user-local overrides — not project files)
 .claude/settings.local.json
+
+# Tauri sidecar binaries (built by make build-sidecar — not committed)
+apps/desktop/src-tauri/binaries/interior-vision-api-*
+
+# PyInstaller build artifacts
+apps/api/dist/
+apps/api/build/
+apps/api/*.spec

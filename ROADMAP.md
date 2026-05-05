@@ -203,15 +203,15 @@
 
 ### 1.3 Tauri sidecar integration
 
-- [ ] Branch: `feat/sidecar-integration`
+- [x] Branch: `feat/sidecar-integration`
 - Bundle the Python sidecar with PyInstaller (one-folder mode) into a binary committed via build script — _or_ use `uv tool install` at runtime (write an ADR comparing both)
 - Configure Tauri to launch the sidecar on app start, terminate on app quit, on a free localhost port
 - Expose a Tauri command `apiBaseUrl()` to the frontend
 - Write a doc `docs/IPC.md` describing the contract
 - **Acceptance:**
-  - [ ] Tauri app starts, sidecar starts, frontend can call `/health` through the URL returned by `apiBaseUrl()`
-  - [ ] Sidecar process is killed when app quits (verified on macOS)
-  - [ ] ADR `0003-sidecar-packaging.md` written
+  - [x] Tauri app starts, sidecar starts, frontend can call `/health` through the URL returned by `apiBaseUrl()`
+  - [x] Sidecar process is killed when app quits (verified on macOS)
+  - [x] ADR `0003-sidecar-packaging.md` written
 
 ### 1.4 Shared types codegen
 

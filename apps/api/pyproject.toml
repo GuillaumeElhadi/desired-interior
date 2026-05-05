@@ -13,6 +13,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "httpx>=0.28",
+  "pyinstaller>=6.12",
   "pytest>=8.3",
   "pytest-asyncio>=0.25",
   "pytest-cov>=6.0",
