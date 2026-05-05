@@ -234,6 +234,22 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
+      - name: Set up uv
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Build sidecar binary
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && hashFiles('apps/api/pyproject.toml') != ''
+        run: make build-sidecar
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

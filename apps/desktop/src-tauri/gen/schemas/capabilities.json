@@ -4,6 +4,13 @@
     "description": "Default capability for the main window",
     "local": true,
     "windows": ["main"],
-    "permissions": ["core:default"]
+    "permissions": [
+      "core:default",
+      {
+        "identifier": "shell:allow-execute",
+        "allow": [{ "name": "interior-vision-api", "sidecar": true }]
+      },
+      "shell:allow-kill"
+    ]
   }
 }

@@ -48,6 +48,16 @@ every fresh clone or when `.pre-commit-config.yaml` changes.
 | `gitleaks`                                         | Secret detection — blocks commits containing API keys, tokens, etc.                   |
 | `commitlint`                                       | Enforces [Conventional Commits](https://www.conventionalcommits.org/) on `commit-msg` |
 
+### Building the Python sidecar binary
+
+Run once after cloning, and again after any Python code change:
+
+```bash
+make build-sidecar   # ~30 s first time; faster on repeat (PyInstaller cache)
+```
+
+The binary is gitignored — it must exist at `apps/desktop/src-tauri/binaries/` before running `pnpm tauri dev`.
+
 ### Running the Python API locally
 
 ```bash
