@@ -7,7 +7,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint apps/desktop/src",
-    "codegen": "(cd apps/api && uv run python export_schema.py) > packages/shared-types/openapi.json && openapi-typescript packages/shared-types/openapi.json -o packages/shared-types/src/index.ts"
+    "codegen": "(cd apps/api && uv run python export_schema.py) > packages/shared-types/openapi.json && prettier --write packages/shared-types/openapi.json && openapi-typescript packages/shared-types/openapi.json -o packages/shared-types/src/index.ts && prettier --write packages/shared-types/src/index.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
