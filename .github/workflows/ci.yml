@@ -201,6 +201,49 @@ jobs:
         run: cargo test
 
   # ---------------------------------------------------------------------------
+  # codegen-check: fails if pnpm codegen produces a diff in packages/shared-types/
+  # ---------------------------------------------------------------------------
+  codegen-check:
+    name: Codegen (shared types up to date)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Set up uv
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        if: hashFiles('apps/api/pyproject.toml') != ''
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run codegen
+        if: hashFiles('apps/api/pyproject.toml') != '' && hashFiles('packages/shared-types/package.json') != ''
+        run: pnpm codegen
+
+      - name: Check for stale generated types
+        if: hashFiles('packages/shared-types/package.json') != ''
+        run: |
+          git diff --exit-code packages/shared-types/ || {
+            echo "::error::Generated types are stale — run 'pnpm codegen' and commit the result"
+            exit 1
+          }
+
+  # ---------------------------------------------------------------------------
   # coverage-gate: passes if both test jobs passed or were skipped
   # Once apps exist, test jobs enforce per-tool thresholds (vitest / pytest).
   # ---------------------------------------------------------------------------

@@ -4,6 +4,8 @@ import os
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.schemas import HealthResponse
+
 app = FastAPI(title="Interior Vision API")
 
 _ALLOWED_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]
@@ -28,9 +30,9 @@ async def _verify_ipc_token(authorization: str | None = Header(default=None)) ->
 
 
 @app.get("/health", dependencies=[Depends(_verify_ipc_token)])
-def health() -> dict[str, str]:
+def health() -> HealthResponse:
     try:
         version = importlib.metadata.version("interior-vision-api")
     except importlib.metadata.PackageNotFoundError:
         version = "0.0.0"
-    return {"status": "ok", "version": version}
+    return HealthResponse(status="ok", version=version)
