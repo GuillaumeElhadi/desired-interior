@@ -8,9 +8,15 @@ from app.schemas import HealthResponse
 
 app = FastAPI(title="Interior Vision API")
 
-_ALLOWED_ORIGINS = ["tauri://localhost", "http://tauri.localhost"]
-if os.getenv("DEBUG"):
-    _ALLOWED_ORIGINS.append("http://localhost:5173")
+# tauri://localhost — production webview origin
+# http://tauri.localhost — alternate production origin (Windows/Linux)
+# http://localhost:5173 — Vite dev server origin (pnpm tauri dev)
+# The IPC token is the real auth boundary; allowing loopback origins is safe.
+_ALLOWED_ORIGINS = [
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "http://localhost:5173",
+]
 
 app.add_middleware(
     CORSMiddleware,
