@@ -72,6 +72,13 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Create sidecar stub (Linux — satisfies tauri-build externalBin check)
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && runner.os == 'Linux'
+        run: |
+          mkdir -p apps/desktop/src-tauri/binaries
+          printf '#!/bin/sh\nexec "$@"\n' > apps/desktop/src-tauri/binaries/interior-vision-api-x86_64-unknown-linux-gnu
+          chmod +x apps/desktop/src-tauri/binaries/interior-vision-api-x86_64-unknown-linux-gnu
+
       - name: cargo fmt --check
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
@@ -180,6 +187,13 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+
+      - name: Create sidecar stub (Linux — satisfies tauri-build externalBin check)
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && runner.os == 'Linux'
+        run: |
+          mkdir -p apps/desktop/src-tauri/binaries
+          printf '#!/bin/sh\nexec "$@"\n' > apps/desktop/src-tauri/binaries/interior-vision-api-x86_64-unknown-linux-gnu
+          chmod +x apps/desktop/src-tauri/binaries/interior-vision-api-x86_64-unknown-linux-gnu
 
       - name: cargo test
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
