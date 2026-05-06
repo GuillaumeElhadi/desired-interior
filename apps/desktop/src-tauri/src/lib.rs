@@ -80,7 +80,7 @@ pub fn run() {
                 let mut rx = rx;
                 while let Some(event) = rx.recv().await {
                     if let tauri_plugin_shell::process::CommandEvent::Stderr(line) = event {
-                        eprint!("[sidecar] {line}");
+                        eprint!("[sidecar] {}", String::from_utf8_lossy(&line));
                     }
                 }
             });
