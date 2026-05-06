@@ -8,6 +8,8 @@ dependencies = [
   "uvicorn[standard]>=0.34",
   "pydantic-settings>=2.7",
   "structlog>=25.1",
+  "fal-client>=0.10",
+  "tenacity>=9.0",
 ]
 
 [dependency-groups]
@@ -31,3 +33,6 @@ select = ["E", "F", "I", "UP"]
 asyncio_mode = "auto"
 addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
+markers = [
+  "live: requires live external services and FAL_KEY env var (deselect with '-m not live')",
+]

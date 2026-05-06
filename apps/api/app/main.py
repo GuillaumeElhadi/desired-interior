@@ -9,12 +9,29 @@ from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app.cloud.fal_client import AsyncFalClient, build_fal_client
 from app.logging_config import configure_logging
 from app.schemas import ErrorResponse, HealthResponse, LogRequest
+from app.settings import Settings
 
 configure_logging()
 
 _log = structlog.get_logger()
+
+settings = Settings()
+fal_client: AsyncFalClient = build_fal_client(settings)
+
+if settings.fal_key is None:
+    _log.warning(
+        "fal_key_missing",
+        hint="ML endpoints will raise FalError until FAL_KEY is configured",
+    )
+
+
+def get_fal_client() -> AsyncFalClient:
+    """FastAPI dependency — injects the process-level fal client into routes."""
+    return fal_client
+
 
 app = FastAPI(title="Interior Vision API")
 
