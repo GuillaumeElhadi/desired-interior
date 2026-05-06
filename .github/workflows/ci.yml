@@ -60,17 +60,27 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
 
-      - name: Install Linux system dependencies (Tauri)
+      # Cache the apt packages so subsequent runs skip the apt-get download.
+      - name: Cache Linux system dependencies (Tauri)
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          version: 1.0
 
       - name: Set up Rust
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      # Rust cache was missing from this job — cargo clippy was recompiling
+      # all crates from scratch on every run (5-10 min). Now cached.
+      - name: Rust cache
+        if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
 
       - name: Create sidecar stub (Linux — satisfies tauri-build externalBin check)
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && runner.os == 'Linux'
@@ -172,11 +182,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Linux system dependencies (Tauri)
+      # Cache the apt packages so subsequent runs skip the apt-get download.
+      - name: Cache Linux system dependencies (Tauri)
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          version: 1.0
 
       - name: Set up Rust
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
@@ -245,7 +257,6 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # coverage-gate: passes if both test jobs passed or were skipped
-  # Once apps exist, test jobs enforce per-tool thresholds (vitest / pytest).
   # ---------------------------------------------------------------------------
   coverage-gate:
     name: Coverage Gate
@@ -303,8 +314,21 @@ jobs:
         working-directory: apps/api
         run: uv sync
 
-      - name: Build sidecar binary
+      # Cache the PyInstaller binary keyed on Python source + deps.
+      # Skip the 8-12 min PyInstaller build when nothing in apps/api/ changed.
+      - name: Cache sidecar binary
+        id: sidecar-cache
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && hashFiles('apps/api/pyproject.toml') != ''
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/src-tauri/binaries
+          key: sidecar-${{ runner.os }}-${{ hashFiles('apps/api/app/**', 'apps/api/pyproject.toml', 'apps/api/uv.lock') }}
+
+      - name: Build sidecar binary
+        if: >
+          hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
+          && hashFiles('apps/api/pyproject.toml') != ''
+          && steps.sidecar-cache.outputs.cache-hit != 'true'
         run: make build-sidecar
 
       - name: Install dependencies
