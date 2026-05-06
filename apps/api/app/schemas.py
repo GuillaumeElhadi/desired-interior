@@ -28,6 +28,39 @@ class LogRequest(BaseModel):
     entries: list[LogEntry]
 
 
+# ---------------------------------------------------------------------------
+# Scene preprocessing (task 2.2)
+# ---------------------------------------------------------------------------
+
+
+class DepthMap(BaseModel):
+    url: str
+    width: int
+    height: int
+
+
+class MaskResult(BaseModel):
+    url: str
+    label: str = ""
+    score: float = 0.0
+    area: int = 0
+    bbox: list[float] = []
+
+
+class SceneMetadata(BaseModel):
+    dominant_surface: str
+    lighting_hint: str
+    light_direction: str
+    color_temperature: str
+
+
+class PreprocessResponse(BaseModel):
+    scene_id: str
+    depth_map: DepthMap
+    masks: list[MaskResult]
+    metadata: SceneMetadata
+
+
 # ErrorResponse is backend-internal: used by _RequestIdMiddleware to build the
 # JSON 500 body. It is not registered as a FastAPI response model and therefore
 # does not appear in openapi.json or packages/shared-types. The shape is

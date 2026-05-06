@@ -1,16 +1,18 @@
 import importlib.metadata
-import os
 import uuid
 
 import structlog
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.cloud.fal_client import AsyncFalClient, build_fal_client
+from app.auth import verify_ipc_token
+from app.cloud.fal_client import build_fal_client
+from app.dependencies import init_fal_client
 from app.logging_config import configure_logging
+from app.scenes.router import router as scenes_router
 from app.schemas import ErrorResponse, HealthResponse, LogRequest
 from app.settings import Settings
 
@@ -19,19 +21,13 @@ configure_logging()
 _log = structlog.get_logger()
 
 settings = Settings()
-fal_client: AsyncFalClient = build_fal_client(settings)
+init_fal_client(build_fal_client(settings))
 
 if settings.fal_key is None:
     _log.warning(
         "fal_key_missing",
         hint="ML endpoints will raise FalError until FAL_KEY is configured",
     )
-
-
-def get_fal_client() -> AsyncFalClient:
-    """FastAPI dependency — injects the process-level fal client into routes."""
-    return fal_client
-
 
 app = FastAPI(title="Interior Vision API")
 
@@ -110,17 +106,10 @@ class _RequestIdMiddleware:
 
 
 app.add_middleware(_RequestIdMiddleware)
+app.include_router(scenes_router)
 
 
-async def _verify_ipc_token(authorization: str | None = Header(default=None)) -> None:
-    token = os.environ.get("IPC_TOKEN")
-    if token is None:
-        return  # dev mode: IPC_TOKEN not set, auth skipped
-    if authorization is None or authorization != f"Bearer {token}":
-        raise HTTPException(status_code=401, detail="invalid IPC token")
-
-
-@app.get("/health", dependencies=[Depends(_verify_ipc_token)])
+@app.get("/health", dependencies=[Depends(verify_ipc_token)])
 def health() -> HealthResponse:
     try:
         version = importlib.metadata.version("interior-vision-api")
@@ -129,7 +118,7 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok", version=version)
 
 
-@app.post("/logs", dependencies=[Depends(_verify_ipc_token)])
+@app.post("/logs", dependencies=[Depends(verify_ipc_token)])
 async def receive_logs(body: LogRequest) -> Response:
     for entry in body.entries:
         bound = _log.bind(
