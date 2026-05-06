@@ -9,6 +9,8 @@ dependencies = [
   "pydantic-settings>=2.7",
   "structlog>=25.1",
   "fal-client>=0.10",
+  "Pillow>=10.0",
+  "python-multipart>=0.0.9",
   "tenacity>=9.0",
 ]
 

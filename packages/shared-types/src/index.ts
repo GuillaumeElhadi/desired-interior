@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  "/scenes/preprocess": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Preprocess */
+    post: operations["preprocess_scenes_preprocess_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -42,6 +59,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** Body_preprocess_scenes_preprocess_post */
+    Body_preprocess_scenes_preprocess_post: {
+      /**
+       * Image
+       * @description Room photo (JPEG / PNG / WEBP)
+       */
+      image: string;
+    };
+    /** DepthMap */
+    DepthMap: {
+      /** Url */
+      url: string;
+      /** Width */
+      width: number;
+      /** Height */
+      height: number;
+    };
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
@@ -81,6 +115,51 @@ export interface components {
       /** Entries */
       entries: components["schemas"]["LogEntry"][];
     };
+    /** MaskResult */
+    MaskResult: {
+      /** Url */
+      url: string;
+      /**
+       * Label
+       * @default
+       */
+      label: string;
+      /**
+       * Score
+       * @default 0
+       */
+      score: number;
+      /**
+       * Area
+       * @default 0
+       */
+      area: number;
+      /**
+       * Bbox
+       * @default []
+       */
+      bbox: number[];
+    };
+    /** PreprocessResponse */
+    PreprocessResponse: {
+      /** Scene Id */
+      scene_id: string;
+      depth_map: components["schemas"]["DepthMap"];
+      /** Masks */
+      masks: components["schemas"]["MaskResult"][];
+      metadata: components["schemas"]["SceneMetadata"];
+    };
+    /** SceneMetadata */
+    SceneMetadata: {
+      /** Dominant Surface */
+      dominant_surface: string;
+      /** Lighting Hint */
+      lighting_hint: string;
+      /** Light Direction */
+      light_direction: string;
+      /** Color Temperature */
+      color_temperature: string;
+    };
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -103,6 +182,41 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  preprocess_scenes_preprocess_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["Body_preprocess_scenes_preprocess_post"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PreprocessResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   health_health_get: {
     parameters: {
       query?: never;

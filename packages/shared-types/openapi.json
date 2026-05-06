@@ -5,6 +5,63 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/scenes/preprocess": {
+      "post": {
+        "tags": ["scenes"],
+        "summary": "Preprocess",
+        "operationId": "preprocess_scenes_preprocess_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preprocess_scenes_preprocess_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreprocessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -108,6 +165,38 @@
   },
   "components": {
     "schemas": {
+      "Body_preprocess_scenes_preprocess_post": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Image",
+            "description": "Room photo (JPEG / PNG / WEBP)"
+          }
+        },
+        "type": "object",
+        "required": ["image"],
+        "title": "Body_preprocess_scenes_preprocess_post"
+      },
+      "DepthMap": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": ["url", "width", "height"],
+        "title": "DepthMap"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -182,6 +271,87 @@
         "type": "object",
         "required": ["entries"],
         "title": "LogRequest"
+      },
+      "MaskResult": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "default": 0.0
+          },
+          "area": {
+            "type": "integer",
+            "title": "Area",
+            "default": 0
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["url"],
+        "title": "MaskResult"
+      },
+      "PreprocessResponse": {
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "title": "Scene Id"
+          },
+          "depth_map": {
+            "$ref": "#/components/schemas/DepthMap"
+          },
+          "masks": {
+            "items": {
+              "$ref": "#/components/schemas/MaskResult"
+            },
+            "type": "array",
+            "title": "Masks"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SceneMetadata"
+          }
+        },
+        "type": "object",
+        "required": ["scene_id", "depth_map", "masks", "metadata"],
+        "title": "PreprocessResponse"
+      },
+      "SceneMetadata": {
+        "properties": {
+          "dominant_surface": {
+            "type": "string",
+            "title": "Dominant Surface"
+          },
+          "lighting_hint": {
+            "type": "string",
+            "title": "Lighting Hint"
+          },
+          "light_direction": {
+            "type": "string",
+            "title": "Light Direction"
+          },
+          "color_temperature": {
+            "type": "string",
+            "title": "Color Temperature"
+          }
+        },
+        "type": "object",
+        "required": ["dominant_surface", "lighting_hint", "light_direction", "color_temperature"],
+        "title": "SceneMetadata"
       },
       "ValidationError": {
         "properties": {

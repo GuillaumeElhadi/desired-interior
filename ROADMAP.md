@@ -251,12 +251,12 @@
 
 ### 2.2 Endpoint: scene preprocessing
 
-- [ ] Branch: `feat/scene-preprocessing`
+- [x] Branch: `feat/scene-preprocessing`
 - `POST /scenes/preprocess` — accepts an image, calls Depth Anything V2 + SAM 2 on fal.ai, returns depth map URL + segmentation masks + scene metadata (estimated dominant surface, lighting hint)
 - Cache results keyed by image SHA-256 for the lifetime of a project (filesystem cache in `~/Library/Caches/InteriorVision/scenes/<hash>/`)
 - **Acceptance:**
-  - [ ] Same image uploaded twice → second call is cache hit (< 50 ms)
-  - [ ] Tests cover cache hit/miss and corrupted-cache recovery
+  - [x] Same image uploaded twice → second call is cache hit (< 50 ms)
+  - [x] Tests cover cache hit/miss and corrupted-cache recovery
 
 ### 2.3 Endpoint: object extraction
 
