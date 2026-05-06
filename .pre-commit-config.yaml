@@ -64,6 +64,7 @@ repos:
       - id: frontend-tests
         name: frontend tests (vitest)
         language: system
-        entry: bash -c 'if [ -f apps/desktop/node_modules/.bin/vitest ]; then pnpm --filter "./apps/desktop" test:run; fi'
+        # Source nvm so the .nvmrc Node version is active (Vitest 4.x requires Node 20+).
+        entry: bash -c 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" --no-use && nvm use --silent 2>/dev/null; if [ -f apps/desktop/node_modules/.bin/vitest ]; then pnpm --filter "./apps/desktop" test:run; fi'
         pass_filenames: false
         stages: [pre-push]
