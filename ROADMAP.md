@@ -225,13 +225,13 @@
 
 ### 1.5 Logging + structured errors
 
-- [ ] Branch: `feat/observability`
+- [x] Branch: `feat/observability`
 - Frontend: a `logger` wrapper around `console` that ships logs to the sidecar `/logs` endpoint
 - Backend: structlog with JSON output in prod, human-readable in dev, request-id middleware
 - Frontend error boundary that shows a friendly screen and logs the error
 - **Acceptance:**
-  - [ ] Errors thrown in React land in backend logs with a correlation ID
-  - [ ] Test asserting that an unhandled FastAPI exception returns a structured JSON error
+  - [x] Errors thrown in React land in backend logs with a correlation ID
+  - [x] Test asserting that an unhandled FastAPI exception returns a structured JSON error
 
 ---
 
