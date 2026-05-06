@@ -241,13 +241,13 @@
 
 ### 2.1 fal.ai client + secrets handling
 
-- [ ] Branch: `feat/fal-client`
+- [x] Branch: `feat/fal-client`
 - Settings: `FAL_KEY` from env, validated by pydantic-settings, surfaced in app via a Settings screen later
 - Thin async client wrapper around `fal-client` SDK with timeouts, retries (tenacity), error normalization
 - All ML calls go through this client — no direct fal.ai usage elsewhere
 - **Acceptance:**
-  - [ ] Unit tests with mocked fal responses (success, timeout, rate limit, malformed payload)
-  - [ ] Optional `@pytest.mark.live` test gated by env var
+  - [x] Unit tests with mocked fal responses (success, timeout, rate limit, malformed payload)
+  - [x] Optional `@pytest.mark.live` test gated by env var
 
 ### 2.2 Endpoint: scene preprocessing
 
