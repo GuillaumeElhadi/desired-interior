@@ -75,10 +75,14 @@ pub fn run() {
                 .spawn()
                 .map_err(|e| format!("spawn failed: {e}"))?;
 
-            // Drain sidecar stdout/stderr to prevent pipe backpressure
+            // Forward sidecar stderr to this process's stderr; drain stdout.
             tauri::async_runtime::spawn(async move {
                 let mut rx = rx;
-                while rx.recv().await.is_some() {}
+                while let Some(event) = rx.recv().await {
+                    if let tauri_plugin_shell::process::CommandEvent::Stderr(line) = event {
+                        eprint!("[sidecar] {line}");
+                    }
+                }
             });
 
             *app.state::<ApiState>().base_url.lock().unwrap() = Some(base_url);
