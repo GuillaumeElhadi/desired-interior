@@ -28,17 +28,48 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 
 ## HTTP endpoints
 
-| Method | Path      | Description    | Response body                          |
-| ------ | --------- | -------------- | -------------------------------------- |
-| `GET`  | `/health` | Liveness probe | `{"status": "ok", "version": "x.y.z"}` |
+| Method | Path      | Description           | Request body        | Response body / status                 |
+| ------ | --------- | --------------------- | ------------------- | -------------------------------------- |
+| `GET`  | `/health` | Liveness probe        | —                   | `{"status": "ok", "version": "x.y.z"}` |
+| `POST` | `/logs`   | Receive frontend logs | `LogRequest` (JSON) | `204 No Content`                       |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
+
+### `LogRequest` schema
+
+```json
+{
+  "entries": [
+    {
+      "level": "debug | info | warn | error",
+      "message": "human-readable message",
+      "correlation_id": "<session UUID — generated once per frontend session>",
+      "timestamp": "<ISO 8601>",
+      "context": { "key": "any JSON-serialisable value" }
+    }
+  ]
+}
+```
+
+### Error response schema
+
+All unhandled exceptions return a structured JSON body:
+
+```json
+{
+  "error": "internal_server_error",
+  "message": "An unexpected error occurred.",
+  "request_id": "<per-request UUID set by the middleware>"
+}
+```
+
+The `X-Request-ID` response header contains the same UUID.
 
 ## Security model
 
 - Sidecar binds only to `127.0.0.1`. No external network exposure.
 - **IPC token**: Rust generates a 128-bit random token at startup (`/dev/urandom`), passes it to the sidecar via `IPC_TOKEN` env var. All routes verify `Authorization: Bearer <token>`. Token is exposed to the frontend only via `invoke("ipc_token")` (not in the DOM or localStorage).
-- **CORS**: Sidecar allows only `tauri://localhost` (and `http://localhost:5173` when `DEBUG` env var is set). Cross-origin browser tabs cannot access the API.
+- **CORS**: Sidecar allows `tauri://localhost`, `http://tauri.localhost`, and `http://localhost:5173` (the Vite dev server origin, always permitted). Cross-origin browser tabs cannot access the API.
 - The capability `shell:allow-execute` in `capabilities/default.json` is scoped to `interior-vision-api` with `sidecar: true`, preventing execution of arbitrary binaries.
 - **Dev mode**: When `IPC_TOKEN` is not set (e.g., running `uv run uvicorn` directly), auth is skipped so the dev workflow is unaffected.
 

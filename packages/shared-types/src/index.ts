@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/logs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Receive Logs */
+    post: operations["receive_logs_logs_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -36,6 +53,33 @@ export interface components {
       status: string;
       /** Version */
       version: string;
+    };
+    /** LogEntry */
+    LogEntry: {
+      level: components["schemas"]["LogLevel"];
+      /** Message */
+      message: string;
+      /** Correlation Id */
+      correlation_id: string;
+      /** Timestamp */
+      timestamp: string;
+      /**
+       * Context
+       * @default {}
+       */
+      context: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * LogLevel
+     * @enum {string}
+     */
+    LogLevel: "debug" | "info" | "warn" | "error";
+    /** LogRequest */
+    LogRequest: {
+      /** Entries */
+      entries: components["schemas"]["LogEntry"][];
     };
     /** ValidationError */
     ValidationError: {
@@ -77,6 +121,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HealthResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  receive_logs_logs_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LogRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
         };
       };
       /** @description Validation Error */
