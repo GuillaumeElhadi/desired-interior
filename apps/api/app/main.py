@@ -10,7 +10,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth import verify_ipc_token
 from app.cloud.fal_client import build_fal_client
-from app.dependencies import get_fal_client, init_fal_client  # noqa: F401 — re-exported
+from app.dependencies import init_fal_client
 from app.logging_config import configure_logging
 from app.scenes.router import router as scenes_router
 from app.schemas import ErrorResponse, HealthResponse, LogRequest
