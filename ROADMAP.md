@@ -299,11 +299,11 @@
 
 ### 3.2 Add objects panel
 
-- [ ] Branch: `feat/object-library`
+- [x] Branch: `feat/object-library`
 - Side panel listing uploaded objects with thumbnails (auto-extracted)
 - Drag from panel onto canvas to place
 - **Acceptance:**
-  - [ ] Add/remove/rename objects, persisted per-project locally (SQLite via `better-sqlite3` in Rust side)
+  - [x] Add/remove/rename objects, persisted per-project locally (SQLite via `better-sqlite3` in Rust side)
 
 ### 3.3 Canvas + interactive placement
 

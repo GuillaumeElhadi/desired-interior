@@ -5,6 +5,7 @@ export type HealthResponse = components["schemas"]["HealthResponse"];
 export type LogEntry = components["schemas"]["LogEntry"];
 export type LogRequest = components["schemas"]["LogRequest"];
 export type PreprocessResponse = components["schemas"]["PreprocessResponse"];
+export type ExtractResponse = components["schemas"]["ExtractResponse"];
 
 export async function getApiBaseUrl(): Promise<string> {
   return invoke<string>("api_base_url");
@@ -47,6 +48,20 @@ export async function preprocessScene(file: File): Promise<PreprocessResponse> {
     throw new Error(`preprocess failed: ${response.status}`);
   }
   return response.json() as Promise<PreprocessResponse>;
+}
+
+export async function extractObject(file: File): Promise<ExtractResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const form = new FormData();
+  form.append("image", file);
+  const response = await fetchWithAuth(`${baseUrl}/objects/extract`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(`extract failed: ${response.status}`);
+  }
+  return response.json() as Promise<ExtractResponse>;
 }
 
 export async function postLog(body: LogRequest): Promise<void> {

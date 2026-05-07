@@ -6,6 +6,14 @@ import * as api from "../lib/api";
 vi.mock("../lib/api", () => ({
   checkHealth: vi.fn(),
   preprocessScene: vi.fn(),
+  extractObject: vi.fn(),
+}));
+
+vi.mock("../lib/db", () => ({
+  loadObjects: vi.fn().mockResolvedValue([]),
+  saveObject: vi.fn(),
+  removeObject: vi.fn(),
+  renameObject: vi.fn(),
 }));
 
 const mockCheckHealth = vi.mocked(api.checkHealth);
