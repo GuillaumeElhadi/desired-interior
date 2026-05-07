@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth import verify_ipc_token
 from app.cloud.fal_client import build_fal_client
+from app.compose.router import router as compose_router
 from app.dependencies import init_fal_client
 from app.logging_config import configure_logging
 from app.objects.router import router as objects_router
@@ -109,6 +110,7 @@ class _RequestIdMiddleware:
 app.add_middleware(_RequestIdMiddleware)
 app.include_router(scenes_router)
 app.include_router(objects_router)
+app.include_router(compose_router)
 
 
 @app.get("/health", dependencies=[Depends(verify_ipc_token)])

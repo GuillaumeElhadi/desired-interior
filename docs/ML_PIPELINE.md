@@ -20,12 +20,17 @@ Object photo ─► Extraction ──────────────┤
 
 ## Models
 
-| Stage               | fal.ai endpoint                               | Purpose                          |
-| ------------------- | --------------------------------------------- | -------------------------------- |
-| Scene preprocessing | `fal-ai/imageutils/depth` (Depth Anything V2) | Depth map estimation             |
-| Scene preprocessing | `fal-ai/sam2` (SAM 2)                         | Segmentation masks               |
-| Object extraction   | `fal-ai/birefnet/v2` (BiRefNet)               | Background removal + alpha mask  |
-| Composition         | `fal-ai/flux-pro/v1/fill` (Flux Fill)         | Reference-conditioned inpainting |
+| Stage               | fal.ai endpoint                               | Purpose                                            |
+| ------------------- | --------------------------------------------- | -------------------------------------------------- |
+| Scene preprocessing | `fal-ai/imageutils/depth` (Depth Anything V2) | Depth map estimation                               |
+| Scene preprocessing | `fal-ai/sam2` (SAM 2)                         | Segmentation masks                                 |
+| Object extraction   | `fal-ai/birefnet/v2` (BiRefNet)               | Background removal + alpha mask                    |
+| Composition         | `fal-ai/flux-pro/v1/fill` (Flux Fill Pro)     | Inpainting: place object at bbox using text prompt |
+
+> **Note**: Flux Fill (`fal-ai/flux-pro/v1/fill`) does not accept a reference image input.
+> The extracted object URL is stored for future reference-conditioning (Redux / IP-Adapter)
+> when fal.ai adds that capability. For V1, the composition prompt describes the object and
+> style hints.
 
 ## Request flow
 
@@ -49,12 +54,12 @@ entry point to the SDK. It handles:
 
 ## Latency budget
 
-| Stage               | Target p95 |
-| ------------------- | ---------- |
-| Scene preprocessing | ≤ 8 s      |
-| Object extraction   | ≤ 5 s      |
-| Composition         | ≤ 15 s     |
-| **End-to-end**      | **≤ 30 s** |
+| Stage               | Target p95 | Model                     |
+| ------------------- | ---------- | ------------------------- |
+| Scene preprocessing | ≤ 8 s      | Depth Anything V2 + SAM 2 |
+| Object extraction   | ≤ 5 s      | BiRefNet v2               |
+| Composition         | ≤ 15 s     | Flux Fill Pro (1024×1024) |
+| **End-to-end**      | **≤ 30 s** | —                         |
 
 Results are cached by image SHA-256 (tasks 2.2 and 2.3) so repeat calls are
 served from disk in < 50 ms.

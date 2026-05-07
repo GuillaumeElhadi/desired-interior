@@ -11,9 +11,20 @@ from typing import Any
 
 from app.disk_cache import compute_sha256
 from app.disk_cache import load_cached as _load
+from app.disk_cache import load_raw as _load_raw
 from app.disk_cache import save_cached as _save
+from app.disk_cache import save_raw as _save_raw
 
-__all__ = ["compute_sha256", "get_cache_root", "load_cached", "save_cached"]
+__all__ = [
+    "compute_sha256",
+    "get_cache_root",
+    "load_cached",
+    "load_original",
+    "save_cached",
+    "save_original",
+]
+
+_ORIGINAL_FILENAME = "original.bin"
 
 
 def get_cache_root() -> Path:
@@ -27,3 +38,11 @@ def load_cached(sha256: str) -> dict[str, Any] | None:
 
 def save_cached(sha256: str, result: dict[str, Any]) -> None:
     _save(sha256, result, get_cache_root())
+
+
+def load_original(sha256: str) -> bytes | None:
+    return _load_raw(sha256, _ORIGINAL_FILENAME, get_cache_root())
+
+
+def save_original(sha256: str, image_bytes: bytes) -> None:
+    _save_raw(sha256, _ORIGINAL_FILENAME, image_bytes, get_cache_root())

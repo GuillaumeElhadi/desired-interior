@@ -78,6 +78,44 @@ class ExtractResponse(BaseModel):
     masked: ExtractedObject
 
 
+# ---------------------------------------------------------------------------
+# Composition (task 2.4)
+# ---------------------------------------------------------------------------
+
+
+class BoundingBox(BaseModel):
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+class PlacementSpec(BaseModel):
+    bbox: BoundingBox
+    depth_hint: float = 0.5
+
+
+class StyleHints(BaseModel):
+    prompt_suffix: str = ""
+
+
+class ComposeRequest(BaseModel):
+    scene_id: str
+    object_id: str
+    placement: PlacementSpec
+    style_hints: StyleHints = StyleHints()
+
+
+class ComposedImage(BaseModel):
+    url: str
+    content_type: str = "image/jpeg"
+
+
+class ComposeResponse(BaseModel):
+    composition_id: str
+    image: ComposedImage
+
+
 # ErrorResponse is backend-internal: used by _RequestIdMiddleware to build the
 # JSON 500 body. It is not registered as a FastAPI response model and therefore
 # does not appear in openapi.json or packages/shared-types. The shape is

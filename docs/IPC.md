@@ -34,6 +34,7 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 | `POST` | `/logs`              | Receive frontend logs      | `LogRequest` (JSON)                   | `204 No Content`            |
 | `POST` | `/scenes/preprocess` | Scene depth + segmentation | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON) |
 | `POST` | `/objects/extract`   | Object background removal  | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)    |
+| `POST` | `/compose`           | Compose object into scene  | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)    |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -52,6 +53,40 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
   ]
 }
 ```
+
+### `ComposeRequest` schema
+
+```json
+{
+  "scene_id": "<SHA-256 returned by /scenes/preprocess>",
+  "object_id": "<SHA-256 returned by /objects/extract>",
+  "placement": {
+    "bbox": { "x": 50, "y": 80, "width": 200, "height": 200 },
+    "depth_hint": 0.5
+  },
+  "style_hints": {
+    "prompt_suffix": "Scandinavian style, warm lighting."
+  }
+}
+```
+
+`bbox` coordinates are in pixels relative to the original room image. `depth_hint` is a normalised depth value (0 = foreground, 1 = background). `style_hints` is optional and defaults to empty.
+
+**Prerequisite**: `/scenes/preprocess` must have been called with the room image before `/compose` — it writes the original image bytes to disk so the composition step can retrieve them. A `409 Conflict` is returned if the original is missing from cache.
+
+### `ComposeResponse` schema
+
+```json
+{
+  "composition_id": "<SHA-256 of the composition inputs — used as cache key>",
+  "image": {
+    "url": "<fal.ai CDN URL of the composed JPEG>",
+    "content_type": "image/jpeg"
+  }
+}
+```
+
+**Latency budget**: ≤ 15 s p95 for 1024×1024 (Flux Fill). Cached compositions are returned in < 50 ms.
 
 ### Error response schema
 
