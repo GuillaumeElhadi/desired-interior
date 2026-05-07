@@ -1,7 +1,16 @@
+import re
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_sha256(v: str) -> str:
+    if not _SHA256_RE.match(v):
+        raise ValueError("must be a 64-character lowercase hex SHA-256 string")
+    return v
 
 
 class HealthResponse(BaseModel):
@@ -76,6 +85,49 @@ class ExtractedObject(BaseModel):
 class ExtractResponse(BaseModel):
     object_id: str
     masked: ExtractedObject
+
+
+# ---------------------------------------------------------------------------
+# Composition (task 2.4)
+# ---------------------------------------------------------------------------
+
+
+class BoundingBox(BaseModel):
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+class PlacementSpec(BaseModel):
+    bbox: BoundingBox
+    depth_hint: float = 0.5
+
+
+class StyleHints(BaseModel):
+    prompt_suffix: Annotated[str, Field(max_length=300, pattern=r"^[\w\s,\.\-'\"!?()]*$")] = ""
+
+
+class ComposeRequest(BaseModel):
+    scene_id: str
+    object_id: str
+    placement: PlacementSpec
+    style_hints: StyleHints = StyleHints()
+
+    @field_validator("scene_id", "object_id")
+    @classmethod
+    def validate_sha256_id(cls, v: str) -> str:
+        return _validate_sha256(v)
+
+
+class ComposedImage(BaseModel):
+    url: str
+    content_type: str = "image/jpeg"
+
+
+class ComposeResponse(BaseModel):
+    composition_id: str
+    image: ComposedImage
 
 
 # ErrorResponse is backend-internal: used by _RequestIdMiddleware to build the

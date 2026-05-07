@@ -36,6 +36,24 @@ def load_cached(sha256: str, root: Path) -> dict[str, Any] | None:
 
 def save_cached(sha256: str, result: dict[str, Any], root: Path) -> None:
     cache_dir = root / sha256
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     (cache_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     _log.debug("cache_saved", sha256=sha256)
+
+
+def load_raw(sha256: str, filename: str, root: Path) -> bytes | None:
+    path = root / sha256 / filename
+    if not path.exists():
+        return None
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        _log.warning("cache_raw_read_error", sha256=sha256, filename=filename, error=str(exc))
+        return None
+
+
+def save_raw(sha256: str, filename: str, data: bytes, root: Path) -> None:
+    cache_dir = root / sha256
+    cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    (cache_dir / filename).write_bytes(data)
+    _log.debug("cache_raw_saved", sha256=sha256, filename=filename)

@@ -38,6 +38,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/compose": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Compose */
+    post: operations["compose_compose_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -91,6 +108,47 @@ export interface components {
        * @description Room photo (JPEG / PNG / WEBP)
        */
       image: string;
+    };
+    /** BoundingBox */
+    BoundingBox: {
+      /** X */
+      x: number;
+      /** Y */
+      y: number;
+      /** Width */
+      width: number;
+      /** Height */
+      height: number;
+    };
+    /** ComposeRequest */
+    ComposeRequest: {
+      /** Scene Id */
+      scene_id: string;
+      /** Object Id */
+      object_id: string;
+      placement: components["schemas"]["PlacementSpec"];
+      /**
+       * @default {
+       *       "prompt_suffix": ""
+       *     }
+       */
+      style_hints: components["schemas"]["StyleHints"];
+    };
+    /** ComposeResponse */
+    ComposeResponse: {
+      /** Composition Id */
+      composition_id: string;
+      image: components["schemas"]["ComposedImage"];
+    };
+    /** ComposedImage */
+    ComposedImage: {
+      /** Url */
+      url: string;
+      /**
+       * Content Type
+       * @default image/jpeg
+       */
+      content_type: string;
     };
     /** DepthMap */
     DepthMap: {
@@ -185,6 +243,15 @@ export interface components {
        */
       bbox: number[];
     };
+    /** PlacementSpec */
+    PlacementSpec: {
+      bbox: components["schemas"]["BoundingBox"];
+      /**
+       * Depth Hint
+       * @default 0.5
+       */
+      depth_hint: number;
+    };
     /** PreprocessResponse */
     PreprocessResponse: {
       /** Scene Id */
@@ -204,6 +271,14 @@ export interface components {
       light_direction: string;
       /** Color Temperature */
       color_temperature: string;
+    };
+    /** StyleHints */
+    StyleHints: {
+      /**
+       * Prompt Suffix
+       * @default
+       */
+      prompt_suffix: string;
     };
     /** ValidationError */
     ValidationError: {
@@ -284,6 +359,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ExtractResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  compose_compose_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ComposeRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ComposeResponse"];
         };
       };
       /** @description Validation Error */

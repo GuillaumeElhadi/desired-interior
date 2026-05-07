@@ -268,12 +268,12 @@
 
 ### 2.4 Endpoint: composition
 
-- [ ] Branch: `feat/composition`
+- [x] Branch: `feat/composition`
 - `POST /compose` — body: scene_id, object_id, placement (bbox + depth hint), style hints
 - Pipeline: build placement mask from bbox+depth → call Flux Fill conditioned by Redux on object image → optional ControlNet Depth → return result image URL
 - **Acceptance:**
-  - [ ] Visual smoke test on 3 fixture scenes — output looks broadly correct (manual review checklist in PR)
-  - [ ] Latency budget documented (<= 15s p95 for 1024x1024)
+  - [x] Visual smoke test on 3 fixture scenes — output looks broadly correct (manual review checklist in PR)
+  - [x] Latency budget documented (<= 15s p95 for 1024x1024)
 
 ### 2.5 E2E test from sidecar perspective
 

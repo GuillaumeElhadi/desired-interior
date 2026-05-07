@@ -119,6 +119,63 @@
         }
       }
     },
+    "/compose": {
+      "post": {
+        "tags": ["compose"],
+        "summary": "Compose",
+        "operationId": "compose_compose_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComposeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -247,6 +304,83 @@
         "type": "object",
         "required": ["image"],
         "title": "Body_preprocess_scenes_preprocess_post"
+      },
+      "BoundingBox": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "width": {
+            "type": "number",
+            "title": "Width"
+          },
+          "height": {
+            "type": "number",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": ["x", "y", "width", "height"],
+        "title": "BoundingBox"
+      },
+      "ComposeRequest": {
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "title": "Scene Id"
+          },
+          "object_id": {
+            "type": "string",
+            "title": "Object Id"
+          },
+          "placement": {
+            "$ref": "#/components/schemas/PlacementSpec"
+          },
+          "style_hints": {
+            "$ref": "#/components/schemas/StyleHints",
+            "default": {
+              "prompt_suffix": ""
+            }
+          }
+        },
+        "type": "object",
+        "required": ["scene_id", "object_id", "placement"],
+        "title": "ComposeRequest"
+      },
+      "ComposeResponse": {
+        "properties": {
+          "composition_id": {
+            "type": "string",
+            "title": "Composition Id"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ComposedImage"
+          }
+        },
+        "type": "object",
+        "required": ["composition_id", "image"],
+        "title": "ComposeResponse"
+      },
+      "ComposedImage": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "default": "image/jpeg"
+          }
+        },
+        "type": "object",
+        "required": ["url"],
+        "title": "ComposedImage"
       },
       "DepthMap": {
         "properties": {
@@ -414,6 +548,21 @@
         "required": ["url"],
         "title": "MaskResult"
       },
+      "PlacementSpec": {
+        "properties": {
+          "bbox": {
+            "$ref": "#/components/schemas/BoundingBox"
+          },
+          "depth_hint": {
+            "type": "number",
+            "title": "Depth Hint",
+            "default": 0.5
+          }
+        },
+        "type": "object",
+        "required": ["bbox"],
+        "title": "PlacementSpec"
+      },
       "PreprocessResponse": {
         "properties": {
           "scene_id": {
@@ -460,6 +609,19 @@
         "type": "object",
         "required": ["dominant_surface", "lighting_hint", "light_direction", "color_temperature"],
         "title": "SceneMetadata"
+      },
+      "StyleHints": {
+        "properties": {
+          "prompt_suffix": {
+            "type": "string",
+            "maxLength": 300,
+            "pattern": "^[\\w\\s,\\.\\-'\\\"!?()]*$",
+            "title": "Prompt Suffix",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "StyleHints"
       },
       "ValidationError": {
         "properties": {
