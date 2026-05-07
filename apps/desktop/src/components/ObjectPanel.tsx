@@ -130,83 +130,118 @@ export function ObjectPanel({ sceneId, onObjectDragStart }: ObjectPanelProps) {
 
       {/* Error banner */}
       {extractError && (
-        <p role="alert" className="px-4 py-2 text-xs text-red-600">
-          {extractError}
-        </p>
+        <div role="alert" className="flex items-start gap-2 px-4 py-2 text-xs text-red-600">
+          <span className="flex-1">{extractError}</span>
+          <button
+            type="button"
+            aria-label="Dismiss error"
+            onClick={() => setExtractError(null)}
+            className="flex-shrink-0 hover:text-red-800"
+          >
+            <svg
+              aria-hidden="true"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
       )}
 
-      {/* Empty states */}
+      {/* Empty states — mutually exclusive with the list */}
       {!sceneId && (
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-gray-400">
+        <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-gray-500">
           Upload a room photo to start adding objects.
         </div>
       )}
 
-      {sceneId && displayedObjects.length === 0 && !extracting && (
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-gray-400">
+      {sceneId && displayedObjects.length === 0 && !extracting ? (
+        <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-gray-500">
           No objects yet.
           <br />
           Click &ldquo;+ Add&rdquo; to add furniture.
         </div>
-      )}
-
-      {/* Object list */}
-      <ul className="flex-1 overflow-y-auto p-2 space-y-1">
-        {displayedObjects.map((obj) => (
-          <li
-            key={obj.id}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData("application/x-interior-vision-object", obj.id);
-              e.dataTransfer.effectAllowed = "copy";
-              onObjectDragStart?.(obj.id);
-            }}
-            className="flex cursor-grab items-center gap-3 rounded-lg p-2 hover:bg-gray-50 active:cursor-grabbing"
-            aria-label={`Object: ${obj.name}`}
-          >
-            {/* Thumbnail */}
-            <img
-              src={obj.masked_url}
-              alt={obj.name}
-              className="h-14 w-14 flex-shrink-0 rounded object-contain bg-gray-100"
-            />
-
-            {/* Name — editable on double-click */}
-            <div className="min-w-0 flex-1">
-              {renamingId === obj.id ? (
-                <input
-                  type="text"
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={() => void commitRename(obj.id)}
-                  onKeyDown={(e) => handleRenameKeyDown(e, obj.id)}
-                  className="w-full rounded border border-brand-accent px-1 py-0.5 text-xs focus:outline-none"
-                  autoFocus
-                  aria-label="Rename object"
-                />
-              ) : (
-                <span
-                  className="block truncate text-xs text-gray-700"
-                  onDoubleClick={() => startRename(obj)}
-                  title="Double-click to rename"
-                >
-                  {obj.name}
-                </span>
-              )}
-            </div>
-
-            {/* Remove */}
-            <button
-              type="button"
-              aria-label={`Remove ${obj.name}`}
-              onClick={() => void handleRemove(obj.id)}
-              className="flex-shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+      ) : (
+        /* Object list — only rendered when there are items */
+        <ul className="flex-1 overflow-y-auto p-2 space-y-1">
+          {displayedObjects.map((obj) => (
+            <li
+              key={obj.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-interior-vision-object", obj.id);
+                e.dataTransfer.effectAllowed = "copy";
+                onObjectDragStart?.(obj.id);
+              }}
+              className="flex cursor-grab items-center gap-3 rounded-lg p-2 hover:bg-gray-50 active:cursor-grabbing"
+              aria-label={`Object: ${obj.name}`}
             >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+              {/* Thumbnail */}
+              <img
+                src={obj.masked_url}
+                alt={obj.name}
+                loading="lazy"
+                className="h-14 w-14 flex-shrink-0 rounded object-contain bg-gray-100"
+              />
+
+              {/* Name — editable on double-click */}
+              <div className="min-w-0 flex-1">
+                {renamingId === obj.id ? (
+                  <input
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => void commitRename(obj.id)}
+                    onKeyDown={(e) => handleRenameKeyDown(e, obj.id)}
+                    className="w-full rounded border border-brand-accent px-1 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-accent focus:ring-offset-1"
+                    autoFocus
+                    aria-label="Rename object"
+                  />
+                ) : (
+                  <span
+                    className="block truncate text-xs text-gray-700"
+                    onDoubleClick={() => startRename(obj)}
+                    title="Double-click to rename"
+                  >
+                    {obj.name}
+                  </span>
+                )}
+              </div>
+
+              {/* Remove — minimum 28×28 px target with SVG icon */}
+              <button
+                type="button"
+                aria-label={`Remove ${obj.name}`}
+                onClick={() => void handleRemove(obj.id)}
+                className="flex min-h-7 min-w-7 flex-shrink-0 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-500"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </aside>
   );
 }
