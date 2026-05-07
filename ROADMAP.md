@@ -277,10 +277,10 @@
 
 ### 2.5 E2E test from sidecar perspective
 
-- [ ] Branch: `test/e2e-pipeline`
+- [x] Branch: `test/e2e-pipeline`
 - A pytest test that uploads a fixture room + fixture chair and asserts a composed image is produced (skipped unless `FAL_KEY` set — gated job in CI with secret)
 - **Acceptance:**
-  - [ ] CI has an opt-in `e2e` job that runs on label `run-e2e` or weekly schedule
+  - [x] CI has an opt-in `e2e` job that runs on label `run-e2e` or weekly schedule
 
 ---
 

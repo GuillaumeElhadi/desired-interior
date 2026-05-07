@@ -37,4 +37,5 @@ addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 markers = [
   "live: requires live external services and FAL_KEY env var (deselect with '-m not live')",
+  "e2e: full pipeline test — preprocess + extract + compose against real fal.ai (requires FAL_KEY)",
 ]
