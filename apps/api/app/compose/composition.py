@@ -32,13 +32,16 @@ _DEFAULT_PROMPT = (
 )
 
 
-def make_cache_key(scene_id: str, object_id: str, placement: PlacementSpec) -> str:
+def make_cache_key(
+    scene_id: str, object_id: str, placement: PlacementSpec, style_hints: StyleHints
+) -> str:
     """Stable cache key that captures all inputs that affect the output."""
     bbox = placement.bbox
     parts = (
         f"{scene_id}:{object_id}:"
         f"{bbox.x:.4f},{bbox.y:.4f},{bbox.width:.4f},{bbox.height:.4f}:"
-        f"{placement.depth_hint:.4f}"
+        f"{placement.depth_hint:.4f}:"
+        f"{style_hints.prompt_suffix}"
     )
     return hashlib.sha256(parts.encode()).hexdigest()
 

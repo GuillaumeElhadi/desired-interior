@@ -39,7 +39,7 @@ async def compose(
         )
 
     object_url: str = (object_data.get("masked") or {}).get("url", "")
-    cache_key = make_cache_key(body.scene_id, body.object_id, body.placement)
+    cache_key = make_cache_key(body.scene_id, body.object_id, body.placement, body.style_hints)
     _log.info(
         "compose_request",
         scene_id=body.scene_id,

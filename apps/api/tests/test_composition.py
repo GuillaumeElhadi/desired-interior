@@ -17,7 +17,7 @@ from app.disk_cache import compute_sha256
 from app.main import app
 from app.objects import cache as obj_cache_module
 from app.scenes import cache as scene_cache_module
-from app.schemas import BoundingBox, PlacementSpec
+from app.schemas import BoundingBox, ComposeRequest, PlacementSpec, StyleHints
 
 OBJECT_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "objects"
 
@@ -32,7 +32,7 @@ _FLUX_FILL_RESPONSE = {
 }
 
 _SCENE_CACHE_ENTRY = {
-    "scene_id": "abc123",
+    "scene_id": "a" * 64,
     "depth_map": {"url": "https://cdn.fal.ai/depth.png", "width": 256, "height": 256},
     "masks": [],
     "metadata": {
@@ -44,7 +44,7 @@ _SCENE_CACHE_ENTRY = {
 }
 
 _OBJECT_CACHE_ENTRY = {
-    "object_id": "def456",
+    "object_id": "b" * 64,
     "masked": {
         "url": "https://cdn.fal.ai/extracted.png",
         "width": 256,
@@ -53,8 +53,8 @@ _OBJECT_CACHE_ENTRY = {
     },
 }
 
-_SCENE_ID = "abc123"
-_OBJECT_ID = "def456"
+_SCENE_ID = "a" * 64
+_OBJECT_ID = "b" * 64
 
 _VALID_BODY = {
     "scene_id": _SCENE_ID,
@@ -152,10 +152,14 @@ def test_compose_cache_save_and_hit(tmp_compose_cache: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _hints(suffix: str = "") -> StyleHints:
+    return StyleHints(prompt_suffix=suffix)
+
+
 def test_make_cache_key_is_deterministic() -> None:
     placement = PlacementSpec(bbox=BoundingBox(x=10, y=20, width=50, height=60), depth_hint=0.3)
-    k1 = make_cache_key("s1", "o1", placement)
-    k2 = make_cache_key("s1", "o1", placement)
+    k1 = make_cache_key("s1", "o1", placement, _hints())
+    k2 = make_cache_key("s1", "o1", placement, _hints())
     assert k1 == k2
     assert len(k1) == 64
 
@@ -163,7 +167,14 @@ def test_make_cache_key_is_deterministic() -> None:
 def test_make_cache_key_differs_on_bbox_change() -> None:
     p1 = PlacementSpec(bbox=BoundingBox(x=10, y=20, width=50, height=60))
     p2 = PlacementSpec(bbox=BoundingBox(x=10, y=20, width=51, height=60))
-    assert make_cache_key("s", "o", p1) != make_cache_key("s", "o", p2)
+    assert make_cache_key("s", "o", p1, _hints()) != make_cache_key("s", "o", p2, _hints())
+
+
+def test_make_cache_key_differs_on_style_hints() -> None:
+    placement = PlacementSpec(bbox=BoundingBox(x=10, y=20, width=50, height=60))
+    assert make_cache_key("s", "o", placement, _hints("modern")) != make_cache_key(
+        "s", "o", placement, _hints("rustic")
+    )
 
 
 def test_build_placement_mask_shape() -> None:
@@ -215,6 +226,56 @@ def test_parse_result_missing_key() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Schema validation tests
+# ---------------------------------------------------------------------------
+
+_VALID_SHA256 = "a" * 64
+
+
+def test_compose_request_rejects_non_hex_scene_id() -> None:
+    import pytest
+
+    with pytest.raises(Exception):
+        ComposeRequest(
+            scene_id="not-a-sha256",
+            object_id=_VALID_SHA256,
+            placement=PlacementSpec(bbox=BoundingBox(x=0, y=0, width=10, height=10)),
+        )
+
+
+def test_compose_request_rejects_path_traversal_scene_id() -> None:
+    import pytest
+
+    with pytest.raises(Exception):
+        ComposeRequest(
+            scene_id="../../../etc/passwd" + "a" * 32,
+            object_id=_VALID_SHA256,
+            placement=PlacementSpec(bbox=BoundingBox(x=0, y=0, width=10, height=10)),
+        )
+
+
+def test_compose_request_rejects_long_prompt_suffix() -> None:
+    import pytest
+
+    with pytest.raises(Exception):
+        ComposeRequest(
+            scene_id=_VALID_SHA256,
+            object_id=_VALID_SHA256,
+            placement=PlacementSpec(bbox=BoundingBox(x=0, y=0, width=10, height=10)),
+            style_hints=StyleHints(prompt_suffix="x" * 301),
+        )
+
+
+def test_compose_request_accepts_valid_sha256_ids() -> None:
+    req = ComposeRequest(
+        scene_id=_VALID_SHA256,
+        object_id=_VALID_SHA256,
+        placement=PlacementSpec(bbox=BoundingBox(x=0, y=0, width=10, height=10)),
+    )
+    assert req.scene_id == _VALID_SHA256
+
+
+# ---------------------------------------------------------------------------
 # Router integration tests (all offline)
 # ---------------------------------------------------------------------------
 
@@ -249,9 +310,10 @@ async def test_compose_cache_hit_skips_fal(
     scene_image = _make_jpeg()
     _seed_caches(tmp_scene_cache, tmp_obj_cache, scene_image)
 
-    # Prime cache
+    # Prime cache — style_hints must match _VALID_BODY exactly
     placement = PlacementSpec(**_VALID_BODY["placement"])
-    cache_key = make_cache_key(_SCENE_ID, _OBJECT_ID, placement)
+    hints = StyleHints(**_VALID_BODY.get("style_hints", {}))
+    cache_key = make_cache_key(_SCENE_ID, _OBJECT_ID, placement, hints)
     compose_cache_module.save_cached(
         cache_key,
         {

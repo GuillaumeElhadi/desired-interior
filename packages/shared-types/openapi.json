@@ -614,6 +614,8 @@
         "properties": {
           "prompt_suffix": {
             "type": "string",
+            "maxLength": 300,
+            "pattern": "^[\\w\\s,\\.\\-'\\\"!?()]*$",
             "title": "Prompt Suffix",
             "default": ""
           }
