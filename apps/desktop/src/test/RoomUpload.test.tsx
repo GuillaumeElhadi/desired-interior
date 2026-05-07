@@ -121,7 +121,7 @@ describe("RoomUpload — drag and drop", () => {
     render(<RoomUpload />);
     const zone = screen.getByRole("region", { name: /room photo upload/i });
     fireEvent.dragOver(zone, { preventDefault: () => {} });
-    expect(zone.className).toMatch(/border-blue/);
+    expect(zone.className).toMatch(/border-brand-accent/);
   });
 
   it("removes highlight on drag-leave", () => {
@@ -129,7 +129,7 @@ describe("RoomUpload — drag and drop", () => {
     const zone = screen.getByRole("region", { name: /room photo upload/i });
     fireEvent.dragOver(zone, { preventDefault: () => {} });
     fireEvent.dragLeave(zone);
-    expect(zone.className).not.toMatch(/border-blue/);
+    expect(zone.className).not.toMatch(/border-brand-accent/);
   });
 
   it("processes a valid dropped file", async () => {
@@ -194,7 +194,7 @@ describe("RoomUpload — preprocessing state", () => {
 // ---------------------------------------------------------------------------
 
 describe("RoomUpload — done state", () => {
-  it("shows a scene-ready message with truncated scene_id", async () => {
+  it("shows a scene-ready message", async () => {
     mockPreprocess.mockResolvedValue(MOCK_PREPROCESS_RESPONSE);
     render(<RoomUpload />);
     const input = screen.getByLabelText(/choose room photo/i);
@@ -229,6 +229,20 @@ describe("RoomUpload — error state", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/preprocess failed/i);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preprocessing — reset guard
+// ---------------------------------------------------------------------------
+
+describe("RoomUpload — reset guard", () => {
+  it("reset button is disabled while preprocessing", async () => {
+    mockPreprocess.mockReturnValue(new Promise(() => {})); // never resolves
+    render(<RoomUpload />);
+    const input = screen.getByLabelText(/choose room photo/i);
+    await userEvent.upload(input, makeFile("room.jpg", "image/jpeg"));
+    expect(screen.getByRole("button", { name: /upload a different photo/i })).toBeDisabled();
   });
 });
 

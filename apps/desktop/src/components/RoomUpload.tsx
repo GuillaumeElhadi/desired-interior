@@ -97,6 +97,9 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
 
   if (state.phase === "idle") {
     return (
+      // Outer div carries the landmark role and drag events.
+      // Inner <label> is the keyboard-activatable interactive zone — clicking it
+      // opens the native file picker without any JS onClick handler.
       <div
         role="region"
         aria-label="Room photo upload"
@@ -104,50 +107,59 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         className={[
-          "flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-16 transition-colors",
+          "rounded-xl border-2 border-dashed transition-colors",
           isDragOver && !disabled
-            ? "border-blue-400 bg-blue-50"
-            : "border-gray-300 bg-white hover:border-gray-400",
-          disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+            ? "border-brand-accent bg-brand-accent/10"
+            : "border-gray-300 bg-white",
+          disabled ? "opacity-50" : "",
         ]
           .filter(Boolean)
           .join(" ")}
-        onClick={() => !disabled && inputRef.current?.click()}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          className="sr-only"
-          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-          onChange={handleInputChange}
-          disabled={disabled}
-          aria-label="Choose room photo"
-        />
-        <svg
-          aria-hidden="true"
-          className="h-12 w-12 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+        <label
+          htmlFor={disabled ? undefined : "room-photo-input"}
+          className={[
+            "flex flex-col items-center justify-center gap-4 p-16",
+            disabled ? "cursor-not-allowed" : "cursor-pointer",
+          ].join(" ")}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18M13.5 10.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
+          <input
+            id="room-photo-input"
+            ref={inputRef}
+            type="file"
+            className="sr-only"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={handleInputChange}
+            disabled={disabled}
+            aria-label="Choose room photo"
           />
-        </svg>
-        <div className="text-center">
-          <p className="text-sm font-medium text-gray-700">
-            {disabled ? "Waiting for API…" : "Drop a room photo here"}
-          </p>
-          {!disabled && (
-            <p className="mt-1 text-xs text-gray-500">
-              or <span className="text-blue-600 underline underline-offset-2">browse files</span>
-              {" — "}JPEG, PNG, WEBP, HEIC · max 50 MB
+          <svg
+            aria-hidden="true"
+            className="h-12 w-12 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18M13.5 10.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
+            />
+          </svg>
+          <div className="text-center">
+            <p className="text-sm font-medium text-gray-700">
+              {disabled ? "Waiting for API…" : "Drop a room photo here"}
             </p>
-          )}
-        </div>
+            {!disabled && (
+              <p className="mt-1 text-xs text-gray-500">
+                or{" "}
+                <span className="text-brand-accent underline underline-offset-2">browse files</span>
+                {" — "}JPEG, PNG, WEBP, HEIC · max 50 MB
+              </p>
+            )}
+          </div>
+        </label>
       </div>
     );
   }
@@ -171,16 +183,12 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
             aria-label="Processing scene"
             className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           >
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-white border-t-transparent" />
+            <div className="motion-safe:animate-spin h-10 w-10 rounded-full border-4 border-white/30 border-t-white" />
           </div>
         )}
       </div>
 
-      {state.phase === "done" && (
-        <p className="text-sm font-medium text-green-600">
-          Scene ready — ID: <span className="font-mono">{state.sceneId.slice(0, 12)}…</span>
-        </p>
-      )}
+      {state.phase === "done" && <p className="text-sm font-medium text-green-600">Scene ready</p>}
 
       {state.phase === "error" && (
         <p role="alert" className="max-w-sm text-center text-sm text-red-600">
@@ -188,10 +196,13 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
         </p>
       )}
 
+      {/* Disabled during preprocessing to prevent orphaned promise from writing
+          stale state after the component has been reset. */}
       <button
         type="button"
         onClick={handleReset}
-        className="text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
+        disabled={state.phase === "preprocessing"}
+        className="text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Upload a different photo
       </button>

@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+@theme {
+  /* System-accent-aware brand colour. Matches macOS default blue (blue-400 equivalent).
+     Override this token when the design system adopts a different accent. */
+  --color-brand-accent: oklch(70.7% 0.165 254.624);
+}
