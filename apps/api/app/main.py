@@ -12,6 +12,7 @@ from app.auth import verify_ipc_token
 from app.cloud.fal_client import build_fal_client
 from app.dependencies import init_fal_client
 from app.logging_config import configure_logging
+from app.objects.router import router as objects_router
 from app.scenes.router import router as scenes_router
 from app.schemas import ErrorResponse, HealthResponse, LogRequest
 from app.settings import Settings
@@ -107,6 +108,7 @@ class _RequestIdMiddleware:
 
 app.add_middleware(_RequestIdMiddleware)
 app.include_router(scenes_router)
+app.include_router(objects_router)
 
 
 @app.get("/health", dependencies=[Depends(verify_ipc_token)])

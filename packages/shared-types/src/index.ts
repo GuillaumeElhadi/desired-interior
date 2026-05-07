@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/objects/extract": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Extract */
+    post: operations["extract_objects_extract_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -59,6 +76,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** Body_extract_objects_extract_post */
+    Body_extract_objects_extract_post: {
+      /**
+       * Image
+       * @description Object photo (JPEG / PNG / WEBP)
+       */
+      image: string;
+    };
     /** Body_preprocess_scenes_preprocess_post */
     Body_preprocess_scenes_preprocess_post: {
       /**
@@ -75,6 +100,26 @@ export interface components {
       width: number;
       /** Height */
       height: number;
+    };
+    /** ExtractResponse */
+    ExtractResponse: {
+      /** Object Id */
+      object_id: string;
+      masked: components["schemas"]["ExtractedObject"];
+    };
+    /** ExtractedObject */
+    ExtractedObject: {
+      /** Url */
+      url: string;
+      /** Width */
+      width: number;
+      /** Height */
+      height: number;
+      /**
+       * Content Type
+       * @default image/png
+       */
+      content_type: string;
     };
     /** HTTPValidationError */
     HTTPValidationError: {
@@ -204,6 +249,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PreprocessResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  extract_objects_extract_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["Body_extract_objects_extract_post"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExtractResponse"];
         };
       };
       /** @description Validation Error */

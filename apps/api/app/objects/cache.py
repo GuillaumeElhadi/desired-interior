@@ -1,9 +1,6 @@
-"""SHA-256 disk cache for scene preprocessing results.
+"""SHA-256 disk cache for object extraction results.
 
-Thin wrapper over app.disk_cache — keeping the public API identical so
-existing code and tests require no changes.
-
-Cache root: ~/Library/Caches/InteriorVision/scenes/<sha256>/result.json
+Cache root: ~/Library/Caches/InteriorVision/objects/<sha256>/result.json
 """
 
 from pathlib import Path
@@ -16,7 +13,7 @@ from app.disk_cache import save_cached as _save
 
 def get_cache_root() -> Path:
     """Override in tests via monkeypatch."""
-    return Path.home() / "Library" / "Caches" / "InteriorVision" / "scenes"
+    return Path.home() / "Library" / "Caches" / "InteriorVision" / "objects"
 
 
 def load_cached(sha256: str) -> dict[str, Any] | None:
