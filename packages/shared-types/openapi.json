@@ -62,6 +62,63 @@
         }
       }
     },
+    "/objects/extract": {
+      "post": {
+        "tags": ["objects"],
+        "summary": "Extract",
+        "operationId": "extract_objects_extract_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_objects_extract_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -165,6 +222,19 @@
   },
   "components": {
     "schemas": {
+      "Body_extract_objects_extract_post": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Image",
+            "description": "Object photo (JPEG / PNG / WEBP)"
+          }
+        },
+        "type": "object",
+        "required": ["image"],
+        "title": "Body_extract_objects_extract_post"
+      },
       "Body_preprocess_scenes_preprocess_post": {
         "properties": {
           "image": {
@@ -196,6 +266,44 @@
         "type": "object",
         "required": ["url", "width", "height"],
         "title": "DepthMap"
+      },
+      "ExtractResponse": {
+        "properties": {
+          "object_id": {
+            "type": "string",
+            "title": "Object Id"
+          },
+          "masked": {
+            "$ref": "#/components/schemas/ExtractedObject"
+          }
+        },
+        "type": "object",
+        "required": ["object_id", "masked"],
+        "title": "ExtractResponse"
+      },
+      "ExtractedObject": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "default": "image/png"
+          }
+        },
+        "type": "object",
+        "required": ["url", "width", "height"],
+        "title": "ExtractedObject"
       },
       "HTTPValidationError": {
         "properties": {

@@ -24,7 +24,7 @@ Object photo ─► Extraction ──────────────┤
 | ------------------- | --------------------------------------------- | -------------------------------- |
 | Scene preprocessing | `fal-ai/imageutils/depth` (Depth Anything V2) | Depth map estimation             |
 | Scene preprocessing | `fal-ai/sam2` (SAM 2)                         | Segmentation masks               |
-| Object extraction   | `fal-ai/sam2` (SAM 2)                         | Object isolation + alpha mask    |
+| Object extraction   | `fal-ai/birefnet/v2` (BiRefNet)               | Background removal + alpha mask  |
 | Composition         | `fal-ai/flux-pro/v1/fill` (Flux Fill)         | Reference-conditioned inpainting |
 
 ## Request flow

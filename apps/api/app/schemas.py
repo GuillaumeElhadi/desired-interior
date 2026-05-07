@@ -61,6 +61,23 @@ class PreprocessResponse(BaseModel):
     metadata: SceneMetadata
 
 
+# ---------------------------------------------------------------------------
+# Object extraction (task 2.3)
+# ---------------------------------------------------------------------------
+
+
+class ExtractedObject(BaseModel):
+    url: str
+    width: int
+    height: int
+    content_type: str = "image/png"
+
+
+class ExtractResponse(BaseModel):
+    object_id: str
+    masked: ExtractedObject
+
+
 # ErrorResponse is backend-internal: used by _RequestIdMiddleware to build the
 # JSON 500 body. It is not registered as a FastAPI response model and therefore
 # does not appear in openapi.json or packages/shared-types. The shape is

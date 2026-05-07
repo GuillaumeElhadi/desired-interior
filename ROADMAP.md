@@ -260,11 +260,11 @@
 
 ### 2.3 Endpoint: object extraction
 
-- [ ] Branch: `feat/object-extraction`
+- [x] Branch: `feat/object-extraction`
 - `POST /objects/extract` — image of an object → cleanly masked PNG with transparency (SAM 2 + alpha matting via fal.ai)
 - Same caching strategy as 2.2
 - **Acceptance:**
-  - [ ] Test fixtures: 5 reference furniture images, visual regression check on masks
+  - [x] Test fixtures: 5 reference furniture images, visual regression check on masks
 
 ### 2.4 Endpoint: composition
 

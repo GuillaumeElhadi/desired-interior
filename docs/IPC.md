@@ -33,6 +33,7 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 | `GET`  | `/health`            | Liveness probe             | —                                     | `HealthResponse` (JSON)     |
 | `POST` | `/logs`              | Receive frontend logs      | `LogRequest` (JSON)                   | `204 No Content`            |
 | `POST` | `/scenes/preprocess` | Scene depth + segmentation | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON) |
+| `POST` | `/objects/extract`   | Object background removal  | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)    |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
