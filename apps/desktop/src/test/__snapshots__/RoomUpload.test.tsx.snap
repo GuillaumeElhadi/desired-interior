@@ -43,13 +43,13 @@ exports[`RoomUpload — snapshot > idle state matches snapshot 1`] = `
         class="mt-1 text-xs text-gray-500"
       >
         or
-
+         
         <span
           class="text-brand-accent underline underline-offset-2"
         >
           browse files
         </span>
-         —
+         — 
         JPEG, PNG, WEBP, HEIC · max 50 MB
       </p>
     </div>
