@@ -4,6 +4,7 @@ import type { components } from "@interior-vision/shared-types";
 export type HealthResponse = components["schemas"]["HealthResponse"];
 export type LogEntry = components["schemas"]["LogEntry"];
 export type LogRequest = components["schemas"]["LogRequest"];
+export type PreprocessResponse = components["schemas"]["PreprocessResponse"];
 
 export async function getApiBaseUrl(): Promise<string> {
   return invoke<string>("api_base_url");
@@ -32,6 +33,20 @@ export async function checkHealth(): Promise<HealthResponse> {
     throw new Error(`health check failed: ${response.status}`);
   }
   return response.json() as Promise<HealthResponse>;
+}
+
+export async function preprocessScene(file: File): Promise<PreprocessResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const form = new FormData();
+  form.append("image", file);
+  const response = await fetchWithAuth(`${baseUrl}/scenes/preprocess`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(`preprocess failed: ${response.status}`);
+  }
+  return response.json() as Promise<PreprocessResponse>;
 }
 
 export async function postLog(body: LogRequest): Promise<void> {

@@ -1,0 +1,58 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`RoomUpload — snapshot > idle state matches snapshot 1`] = `
+<div
+  aria-label="Room photo upload"
+  class="rounded-xl border-2 border-dashed transition-colors border-gray-300 bg-white"
+  role="region"
+>
+  <label
+    class="flex flex-col items-center justify-center gap-4 p-16 cursor-pointer"
+    for="room-photo-input"
+  >
+    <input
+      accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+      aria-label="Choose room photo"
+      class="sr-only"
+      id="room-photo-input"
+      type="file"
+    />
+    <svg
+      aria-hidden="true"
+      class="h-12 w-12 text-gray-400"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18M13.5 10.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.5"
+      />
+    </svg>
+    <div
+      class="text-center"
+    >
+      <p
+        class="text-sm font-medium text-gray-700"
+      >
+        Drop a room photo here
+      </p>
+      <p
+        class="mt-1 text-xs text-gray-500"
+      >
+        or
+         
+        <span
+          class="text-brand-accent underline underline-offset-2"
+        >
+          browse files
+        </span>
+         — 
+        JPEG, PNG, WEBP, HEIC · max 50 MB
+      </p>
+    </div>
+  </label>
+</div>
+`;

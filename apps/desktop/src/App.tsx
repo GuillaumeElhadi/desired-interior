@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { RoomUpload } from "./components/RoomUpload";
 import { checkHealth } from "./lib/api";
 
 interface HealthState {
@@ -48,16 +49,29 @@ function App() {
   }, []);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50">
-      <h1 className="text-4xl font-bold text-gray-900">Interior Vision — Hello</h1>
-      {health.status === "loading" && <p className="text-sm text-gray-500">Connecting to API…</p>}
-      {health.status === "ok" && (
-        <p className="text-sm text-green-600">API healthy · v{health.version}</p>
-      )}
-      {health.status === "error" && (
-        <p className="text-sm text-red-600">API error: {health.error}</p>
-      )}
-    </main>
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
+        <h1 className="text-base font-semibold text-gray-900">Interior Vision</h1>
+        <span className="text-xs text-gray-400">
+          {health.status === "loading" && "Connecting to API…"}
+          {health.status === "ok" && `API healthy · v${health.version}`}
+          {health.status === "error" && (
+            <span className="text-red-500">API error: {health.error}</span>
+          )}
+        </span>
+      </header>
+
+      <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">Upload a room photo</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            We&apos;ll analyse the scene and prepare it for object placement.
+          </p>
+        </div>
+
+        <RoomUpload disabled={health.status !== "ok"} />
+      </main>
+    </div>
   );
 }
 

@@ -5,6 +5,7 @@ import * as api from "../lib/api";
 
 vi.mock("../lib/api", () => ({
   checkHealth: vi.fn(),
+  preprocessScene: vi.fn(),
 }));
 
 const mockCheckHealth = vi.mocked(api.checkHealth);
@@ -13,10 +14,15 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.useRealTimers());
 
 describe("App", () => {
-  it("renders the heading and shows connecting state initially", () => {
+  it("renders the heading", () => {
     mockCheckHealth.mockReturnValue(new Promise(() => {})); // never resolves
     render(<App />);
     expect(screen.getByRole("heading", { name: /interior vision/i })).toBeInTheDocument();
+  });
+
+  it("shows connecting state while waiting for sidecar", () => {
+    mockCheckHealth.mockReturnValue(new Promise(() => {}));
+    render(<App />);
     expect(screen.getByText(/connecting to api/i)).toBeInTheDocument();
   });
 
@@ -49,6 +55,14 @@ describe("App", () => {
     vi.useRealTimers();
     await waitFor(() => {
       expect(screen.getByText(/api error/i)).toBeInTheDocument();
+    });
+  });
+
+  it("renders the upload region once API is healthy", async () => {
+    mockCheckHealth.mockResolvedValue({ status: "ok", version: "0.0.0" });
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: /room photo upload/i })).toBeInTheDocument();
     });
   });
 });

@@ -290,12 +290,12 @@
 
 ### 3.1 Upload screen — room photo
 
-- [ ] Branch: `feat/upload-room`
+- [x] Branch: `feat/upload-room`
 - Drag-and-drop + file picker, preview, EXIF orientation handling, max size guard
 - On upload, kick off scene preprocessing in background; show progress
 - **Acceptance:**
-  - [ ] Tested with HEIC, JPEG, PNG inputs
-  - [ ] Visual regression test (Storybook + Chromatic, or Playwright screenshot)
+  - [x] Tested with HEIC, JPEG, PNG inputs
+  - [x] Visual regression test (Storybook + Chromatic, or Playwright screenshot)
 
 ### 3.2 Add objects panel
 
