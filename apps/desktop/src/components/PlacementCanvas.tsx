@@ -125,8 +125,9 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Ignore when typing in an input
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      // Ignore when typing in any text-input context
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return;
 
       if (!selectedId) {
         if (e.key === "Escape") setSelectedId(null);
@@ -150,6 +151,8 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
       }
 
       if (e.key === "r" || e.key === "R") {
+        // Require canvas to have focus so bare 'r' doesn't fire from sibling panels
+        if (document.activeElement !== containerRef.current) return;
         setPlacements((prev) =>
           prev.map((p) => {
             if (p.id !== selectedId) return p;
@@ -229,6 +232,7 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
       await savePlacement(placement);
       setPlacements((prev) => [...prev, placement]);
       setSelectedId(placement.id);
+      containerRef.current?.focus();
     },
     [objectsMap, sceneId, masks, stageSize]
   );
@@ -283,11 +287,12 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 overflow-hidden bg-gray-900"
+      className="relative flex-1 overflow-hidden bg-gray-900 outline-none"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       aria-label="Placement canvas"
       role="region"
+      tabIndex={0}
     >
       <Stage
         ref={stageRef}
@@ -325,7 +330,10 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
                 scaleY={p.scale_y}
                 rotation={p.rotation}
                 draggable
-                onClick={() => setSelectedId(p.id)}
+                onClick={() => {
+                  setSelectedId(p.id);
+                  containerRef.current?.focus();
+                }}
                 onDragEnd={handleDragEnd(p.id)}
                 onTransformEnd={handleTransformEnd(p.id)}
               />
@@ -348,7 +356,7 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
           const p = placements.find((pl) => pl.id === selectedId);
           if (!p) return null;
           return (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-lg bg-black/60 px-3 py-2 text-xs text-white backdrop-blur-sm">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-lg bg-black/75 px-3 py-2 text-xs text-white backdrop-blur-sm">
               <span>Depth</span>
               <input
                 type="range"
