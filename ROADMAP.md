@@ -307,12 +307,12 @@
 
 ### 3.3 Canvas + interactive placement
 
-- [ ] Branch: `feat/canvas-placement`
+- [x] Branch: `feat/canvas-placement`
 - Konva.js or Pixi.js canvas overlaying the room photo
 - Drag, scale, rotate placeholder; depth hint via slider; snap to detected surfaces (use scene metadata from 2.2)
 - **Acceptance:**
-  - [ ] Pixel-precise placement persisted, restorable on reload
-  - [ ] Keyboard shortcuts documented
+  - [x] Pixel-precise placement persisted, restorable on reload
+  - [x] Keyboard shortcuts documented
 
 ### 3.4 Render trigger + result view
 

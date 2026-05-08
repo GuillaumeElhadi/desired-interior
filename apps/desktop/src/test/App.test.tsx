@@ -14,7 +14,26 @@ vi.mock("../lib/db", () => ({
   saveObject: vi.fn(),
   removeObject: vi.fn(),
   renameObject: vi.fn(),
+  loadPlacements: vi.fn().mockResolvedValue([]),
+  savePlacement: vi.fn(),
+  updatePlacement: vi.fn(),
+  deletePlacement: vi.fn(),
 }));
+
+vi.mock("konva", () => ({ default: {} }));
+vi.mock("react-konva", async () => {
+  const { forwardRef } = await import("react");
+  return {
+    Stage: forwardRef(({ children, ...p }: React.ComponentProps<"div">) => (
+      <div data-testid="konva-stage" {...p}>
+        {children}
+      </div>
+    )),
+    Layer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    Image: forwardRef(() => <img alt="" />),
+    Transformer: forwardRef(() => null),
+  };
+});
 
 const mockCheckHealth = vi.mocked(api.checkHealth);
 

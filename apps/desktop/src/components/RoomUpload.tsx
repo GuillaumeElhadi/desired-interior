@@ -1,5 +1,12 @@
 import { useCallback, useRef, useState } from "react";
+import type { PreprocessResponse } from "../lib/api";
 import { preprocessScene } from "../lib/api";
+
+export interface SceneContext {
+  sceneId: string;
+  imageUrl: string;
+  masks: PreprocessResponse["masks"];
+}
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
 const ACCEPTED_MIME = new Set([
@@ -18,7 +25,7 @@ type UploadState =
 
 interface RoomUploadProps {
   disabled?: boolean;
-  onSceneReady?: (sceneId: string) => void;
+  onSceneReady?: (ctx: SceneContext) => void;
 }
 
 function validateFile(file: File): string | null {
@@ -48,7 +55,7 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
       try {
         const result = await preprocessScene(file);
         setState({ phase: "done", file, objectUrl, sceneId: result.scene_id });
-        onSceneReady?.(result.scene_id);
+        onSceneReady?.({ sceneId: result.scene_id, imageUrl: objectUrl, masks: result.masks });
       } catch (err) {
         setState({ phase: "error", file, objectUrl, message: String(err) });
       }

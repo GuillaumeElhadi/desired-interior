@@ -18,8 +18,10 @@
     "@interior-vision/shared-types": "workspace:*",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-sql": "^2.4.0",
+    "konva": "^10.3.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-konva": "^19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",

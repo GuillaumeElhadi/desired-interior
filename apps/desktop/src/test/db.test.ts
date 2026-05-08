@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ObjectRecord } from "../lib/db";
+import type { ObjectRecord, PlacementRecord } from "../lib/db";
 
 // Mock tauri-plugin-sql before importing db module
 vi.mock("@tauri-apps/plugin-sql", () => ({
@@ -9,7 +9,17 @@ vi.mock("@tauri-apps/plugin-sql", () => ({
 }));
 
 import Database from "@tauri-apps/plugin-sql";
-import { _resetDbForTest, loadObjects, removeObject, renameObject, saveObject } from "../lib/db";
+import {
+  _resetDbForTest,
+  deletePlacement,
+  loadObjects,
+  loadPlacements,
+  removeObject,
+  renameObject,
+  saveObject,
+  savePlacement,
+  updatePlacement,
+} from "../lib/db";
 
 const mockLoad = vi.mocked(Database.load);
 
@@ -104,6 +114,103 @@ describe("renameObject", () => {
     expect(vi.mocked(mockDb.execute)).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE objects SET name"),
       ["sofa", RECORD.id]
+    );
+  });
+});
+
+const PLACEMENT: PlacementRecord = {
+  id: "12345678-1234-1234-1234-123456789abc",
+  scene_id: RECORD.scene_id,
+  object_id: RECORD.id,
+  x: 120,
+  y: 80,
+  scale_x: 0.25,
+  scale_y: 0.25,
+  rotation: 15,
+  depth_hint: 0.6,
+  updated_at: 1_700_000_001,
+};
+
+describe("loadPlacements", () => {
+  it("queries placements by scene_id in ASC order", async () => {
+    const mockDb = makeMockDb({ select: vi.fn().mockResolvedValue([PLACEMENT]) });
+    mockLoad.mockResolvedValue(mockDb);
+
+    const result = await loadPlacements(PLACEMENT.scene_id);
+
+    expect(result).toEqual([PLACEMENT]);
+    expect(vi.mocked(mockDb.select)).toHaveBeenCalledWith(expect.stringContaining("scene_id"), [
+      PLACEMENT.scene_id,
+    ]);
+  });
+
+  it("returns empty array when no placements match", async () => {
+    const mockDb = makeMockDb({ select: vi.fn().mockResolvedValue([]) });
+    mockLoad.mockResolvedValue(mockDb);
+
+    const result = await loadPlacements("no-scene");
+    expect(result).toEqual([]);
+  });
+});
+
+describe("savePlacement", () => {
+  it("calls execute with INSERT OR IGNORE and all fields", async () => {
+    const mockDb = makeMockDb();
+    mockLoad.mockResolvedValue(mockDb);
+
+    await savePlacement(PLACEMENT);
+
+    expect(vi.mocked(mockDb.execute)).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT OR IGNORE"),
+      [
+        PLACEMENT.id,
+        PLACEMENT.scene_id,
+        PLACEMENT.object_id,
+        PLACEMENT.x,
+        PLACEMENT.y,
+        PLACEMENT.scale_x,
+        PLACEMENT.scale_y,
+        PLACEMENT.rotation,
+        PLACEMENT.depth_hint,
+        PLACEMENT.updated_at,
+      ]
+    );
+  });
+});
+
+describe("updatePlacement", () => {
+  it("calls execute with UPDATE and spatial/transform fields", async () => {
+    const mockDb = makeMockDb();
+    mockLoad.mockResolvedValue(mockDb);
+
+    await updatePlacement(PLACEMENT);
+
+    expect(vi.mocked(mockDb.execute)).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE placements SET"),
+      [
+        PLACEMENT.x,
+        PLACEMENT.y,
+        PLACEMENT.scale_x,
+        PLACEMENT.scale_y,
+        PLACEMENT.rotation,
+        PLACEMENT.depth_hint,
+        PLACEMENT.updated_at,
+        PLACEMENT.id,
+      ]
+    );
+  });
+});
+
+describe("deletePlacement", () => {
+  it("calls execute with DELETE WHERE id", async () => {
+    const mockDb = makeMockDb();
+    mockLoad.mockResolvedValue(mockDb);
+
+    await deletePlacement(PLACEMENT.id);
+
+    expect(vi.mocked(mockDb.execute)).toHaveBeenCalledWith(
+      expect.stringContaining("DELETE FROM placements WHERE id"),
+      [PLACEMENT.id]
     );
   });
 });

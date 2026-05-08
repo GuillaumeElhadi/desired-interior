@@ -31,22 +31,43 @@ fn find_free_port() -> u16 {
         .port()
 }
 
-fn object_migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "create_objects_table",
-        sql: "CREATE TABLE IF NOT EXISTS objects (\
-              id TEXT PRIMARY KEY, \
-              scene_id TEXT NOT NULL, \
-              name TEXT NOT NULL, \
-              masked_url TEXT NOT NULL, \
-              width INTEGER NOT NULL DEFAULT 0, \
-              height INTEGER NOT NULL DEFAULT 0, \
-              created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')) \
-              ); \
-              CREATE INDEX IF NOT EXISTS idx_objects_scene_id ON objects(scene_id);",
-        kind: MigrationKind::Up,
-    }]
+fn db_migrations() -> Vec<Migration> {
+    vec![
+        Migration {
+            version: 1,
+            description: "create_objects_table",
+            sql: "CREATE TABLE IF NOT EXISTS objects (\
+                  id TEXT PRIMARY KEY, \
+                  scene_id TEXT NOT NULL, \
+                  name TEXT NOT NULL, \
+                  masked_url TEXT NOT NULL, \
+                  width INTEGER NOT NULL DEFAULT 0, \
+                  height INTEGER NOT NULL DEFAULT 0, \
+                  created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')) \
+                  ); \
+                  CREATE INDEX IF NOT EXISTS idx_objects_scene_id ON objects(scene_id);",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "create_placements_table",
+            sql: "CREATE TABLE IF NOT EXISTS placements (\
+                  id TEXT PRIMARY KEY, \
+                  scene_id TEXT NOT NULL, \
+                  object_id TEXT NOT NULL, \
+                  x REAL NOT NULL DEFAULT 0.0, \
+                  y REAL NOT NULL DEFAULT 0.0, \
+                  scale_x REAL NOT NULL DEFAULT 1.0, \
+                  scale_y REAL NOT NULL DEFAULT 1.0, \
+                  rotation REAL NOT NULL DEFAULT 0.0, \
+                  depth_hint REAL NOT NULL DEFAULT 0.5, \
+                  updated_at INTEGER NOT NULL \
+                  ); \
+                  CREATE INDEX IF NOT EXISTS idx_placements_scene_id \
+                  ON placements(scene_id);",
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 #[tauri::command]
@@ -74,7 +95,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             SqlBuilder::default()
-                .add_migrations("sqlite:interior-vision.db", object_migrations())
+                .add_migrations("sqlite:interior-vision.db", db_migrations())
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
