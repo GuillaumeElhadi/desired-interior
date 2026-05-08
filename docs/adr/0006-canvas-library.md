@@ -24,9 +24,9 @@ The options evaluated were:
 
 ## Decision
 
-Use **Konva.js `^10.3.0`** and **react-konva `^19.2.4`** as the sole canvas rendering layer.
+Use **Konva.js `^8.4.2`** and **react-konva `^18.2.2`** as the sole canvas rendering layer.
 
-The `react-konva@19.x` / React 18 peer-dependency mismatch is accepted: the library functions correctly at runtime with React 18 (the `its-fine` bridge is the compatibility shim), and the project will upgrade to React 19 in a dedicated `chore(deps)` PR.
+`react-konva@18.x` is the React 18–compatible release line; `react-konva@19.x` requires React 19 and ships `its-fine@2.x` which accesses React 19 internals that are absent in React 18, causing a module-evaluation crash (blank white screen, no ErrorBoundary recovery). The project will upgrade to React 19 + react-konva@19 in a dedicated `chore(deps)` PR; until then, the `^8.4.2` / `^18.2.2` pair is the correct choice.
 
 ## Consequences
 
