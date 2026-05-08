@@ -2,6 +2,7 @@ use std::io::Read;
 use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_sql::{Builder as SqlBuilder, Migration, MigrationKind};
 
 struct ApiState {
     base_url: Mutex<Option<String>>,
@@ -30,6 +31,24 @@ fn find_free_port() -> u16 {
         .port()
 }
 
+fn object_migrations() -> Vec<Migration> {
+    vec![Migration {
+        version: 1,
+        description: "create_objects_table",
+        sql: "CREATE TABLE IF NOT EXISTS objects (\
+              id TEXT PRIMARY KEY, \
+              scene_id TEXT NOT NULL, \
+              name TEXT NOT NULL, \
+              masked_url TEXT NOT NULL, \
+              width INTEGER NOT NULL DEFAULT 0, \
+              height INTEGER NOT NULL DEFAULT 0, \
+              created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')) \
+              ); \
+              CREATE INDEX IF NOT EXISTS idx_objects_scene_id ON objects(scene_id);",
+        kind: MigrationKind::Up,
+    }]
+}
+
 #[tauri::command]
 fn api_base_url(state: tauri::State<ApiState>) -> Result<String, String> {
     state
@@ -53,6 +72,11 @@ fn ipc_token(state: tauri::State<ApiState>) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            SqlBuilder::default()
+                .add_migrations("sqlite:interior-vision.db", object_migrations())
+                .build(),
+        )
         .plugin(tauri_plugin_shell::init())
         .manage(ApiState {
             base_url: Mutex::new(None),
