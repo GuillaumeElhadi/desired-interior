@@ -275,17 +275,6 @@
   - [x] Visual smoke test on 3 fixture scenes — output looks broadly correct (manual review checklist in PR)
   - [x] Latency budget documented (<= 15s p95 for 1024x1024)
 
-### 2.6 Fix scene segmentation endpoint (SAM2 replacement)
-
-- [ ] Branch: `fix/sam2-endpoint`
-- `fal-ai/sam2` (everything/automatic mode) was removed from fal.ai; preprocessing currently silences the 404 and returns empty masks, losing snap-to-surface and dominant-surface detection.
-- Find and integrate a replacement endpoint that returns a list of segments with bbox, area, and confidence (candidates: `fal-ai/grounded-sam-2`, `fal-ai/florence-2`, or a future fal.ai SAM2-auto equivalent).
-- **Acceptance:**
-  - [ ] `run_preprocessing` returns ≥ 1 mask with a valid bbox on a standard room photo
-  - [ ] `dominant_surface` is no longer `"unknown"` for typical interiors
-  - [ ] Snap-to-surface in PlacementCanvas works for at least one detected surface
-  - [ ] Existing preprocessing tests updated for the new response format
-
 ### 2.5 E2E test from sidecar perspective
 
 - [x] Branch: `test/e2e-pipeline`
@@ -334,7 +323,17 @@
   - [x] Cancel mid-render works (request aborted server-side)
   - [x] Failed render shows actionable error
 
-### 3.5 Project history + multi-iteration
+### 3.5 Fix scene segmentation endpoint (SAM2 replacement)
+
+- [x] Branch: `fix/sam2-endpoint`
+- `fal-ai/sam2` (everything/automatic mode) was removed from fal.ai. Replaced with `fal-ai/sam` (YOLO-World + SAM) which returns a colour-coded segmentation PNG. Per-region bboxes extracted via Pillow single-pass colour grouping. `fal.fetch_bytes` added to `AsyncFalClient` for SSRF-safe CDN downloads.
+- **Acceptance:**
+  - [x] `run_preprocessing` returns ≥ 1 mask with a valid bbox on a standard room photo
+  - [x] `dominant_surface` is no longer `"unknown"` for typical interiors
+  - [x] Snap-to-surface in PlacementCanvas works for at least one detected surface
+  - [x] Existing preprocessing tests updated for the new response format
+
+### 3.6 Project history + multi-iteration
 
 - [ ] Branch: `feat/project-history`
 - Sidebar listing prior renders for current project, click to compare
