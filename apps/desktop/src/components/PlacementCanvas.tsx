@@ -226,6 +226,12 @@ export function PlacementCanvas({
       height: (entry.image.naturalHeight * target.scale_y) / scale,
     };
 
+    if (bbox.width <= 0 || bbox.height <= 0) {
+      setRenderPhase("error");
+      setRenderError("Object has zero or negative dimensions — reset its scale and try again.");
+      return;
+    }
+
     const ac = new AbortController();
     abortRef.current = ac;
     setRenderPhase("rendering");
@@ -254,9 +260,9 @@ export function PlacementCanvas({
       if (err instanceof Error && err.name === "AbortError") {
         setRenderPhase("idle");
       } else {
-        const msg = err instanceof Error ? err.message : String(err);
+        // Show a safe generic message; the raw error may contain sidecar internals.
         setRenderPhase("error");
-        setRenderError(msg);
+        setRenderError("Render failed. Please try again.");
       }
     }
   }, [
@@ -461,13 +467,14 @@ export function PlacementCanvas({
           );
         })()}
 
-      {/* Render button — shown when idle and at least one placement exists */}
-      {placements.length > 0 && renderPhase === "idle" && (
-        <div className="absolute right-4 top-4 z-10">
+      {/* Render button — bottom-right, hidden when an object is selected (avoids conflict
+          with the Konva Transformer handles and the depth slider) */}
+      {placements.length > 0 && renderPhase === "idle" && !selectedId && (
+        <div className="absolute bottom-4 right-4 z-10">
           <button
             type="button"
             onClick={() => void handleRender()}
-            className="rounded-lg bg-brand-accent px-4 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand-accent focus:ring-offset-2"
+            className="rounded-lg bg-brand-accent px-4 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
           >
             Render
           </button>
@@ -482,7 +489,7 @@ export function PlacementCanvas({
           <button
             type="button"
             onClick={handleCancelRender}
-            className="mt-3 text-xs text-white/70 underline underline-offset-2 hover:text-white"
+            className="mt-3 rounded px-3 py-1 text-xs text-white/70 underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
             Cancel
           </button>
@@ -491,7 +498,7 @@ export function PlacementCanvas({
 
       {/* Error overlay */}
       {renderPhase === "error" && renderError && (
-        <div className="absolute right-4 top-4 z-10 flex max-w-xs flex-col items-end gap-2">
+        <div className="absolute bottom-4 right-4 z-10 flex max-w-xs flex-col items-end gap-2">
           <div role="alert" className="rounded-lg bg-red-900/80 px-3 py-2 text-xs text-red-100">
             {renderError}
           </div>
@@ -499,14 +506,14 @@ export function PlacementCanvas({
             <button
               type="button"
               onClick={() => setRenderPhase("idle")}
-              className="text-xs text-white/60 underline underline-offset-2 hover:text-white/90"
+              className="rounded px-2 py-1 text-xs text-white/60 underline underline-offset-2 hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             >
               Dismiss
             </button>
             <button
               type="button"
               onClick={() => void handleRender()}
-              className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white"
+              className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
             >
               Retry
             </button>
