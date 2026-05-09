@@ -67,6 +67,20 @@ fn db_migrations() -> Vec<Migration> {
                   ON placements(scene_id);",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "create_renders_table",
+            sql: "CREATE TABLE IF NOT EXISTS renders (\
+                  id TEXT PRIMARY KEY, \
+                  scene_id TEXT NOT NULL, \
+                  composition_id TEXT NOT NULL, \
+                  result_url TEXT NOT NULL, \
+                  created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')) \
+                  ); \
+                  CREATE INDEX IF NOT EXISTS idx_renders_scene_id \
+                  ON renders(scene_id);",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ObjectPanel } from "./components/ObjectPanel";
 import { PlacementCanvas } from "./components/PlacementCanvas";
+import { ResultView } from "./components/ResultView";
 import { RoomUpload, type SceneContext } from "./components/RoomUpload";
 import { checkHealth } from "./lib/api";
 
@@ -36,9 +37,15 @@ async function waitForSidecar(signal: AbortSignal): Promise<{ version: string }>
   throw lastError;
 }
 
+interface RenderResult {
+  url: string;
+  compositionId: string;
+}
+
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
   const [sceneCtx, setSceneCtx] = useState<SceneContext | null>(null);
+  const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,12 +72,23 @@ function App() {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        {sceneCtx ? (
+        {sceneCtx && renderResult ? (
+          <>
+            <ResultView
+              originalUrl={sceneCtx.imageUrl}
+              resultUrl={renderResult.url}
+              onBack={() => setRenderResult(null)}
+              onRerender={() => setRenderResult(null)}
+            />
+            <ObjectPanel sceneId={sceneCtx.sceneId} />
+          </>
+        ) : sceneCtx ? (
           <>
             <PlacementCanvas
               sceneId={sceneCtx.sceneId}
               imageUrl={sceneCtx.imageUrl}
               masks={sceneCtx.masks}
+              onRenderComplete={setRenderResult}
             />
             <ObjectPanel sceneId={sceneCtx.sceneId} />
           </>

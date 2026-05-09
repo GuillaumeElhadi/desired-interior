@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlacementCanvas } from "../components/PlacementCanvas";
+import * as api from "../lib/api";
 import * as db from "../lib/db";
 
 vi.mock("konva", () => ({ default: {} }));
@@ -39,6 +40,11 @@ vi.mock("../lib/db", () => ({
   savePlacement: vi.fn().mockResolvedValue(undefined),
   updatePlacement: vi.fn().mockResolvedValue(undefined),
   deletePlacement: vi.fn().mockResolvedValue(undefined),
+  saveRender: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../lib/api", () => ({
+  compose: vi.fn(),
 }));
 
 const SCENE_ID = "a".repeat(64);
@@ -239,6 +245,110 @@ describe("PlacementCanvas — keyboard shortcuts", () => {
       expect(db.updatePlacement).toHaveBeenCalledWith(
         expect.objectContaining({ scale_x: 1, scale_y: 1, rotation: 0 })
       );
+    });
+  });
+});
+
+describe("PlacementCanvas — render flow", () => {
+  const COMPOSE_RESPONSE = {
+    composition_id: "c".repeat(64),
+    image: { url: "https://cdn.fal.ai/result.jpg", content_type: "image/jpeg" },
+  };
+
+  async function renderWithPlacement() {
+    vi.mocked(db.loadPlacements).mockResolvedValue([MOCK_PLACEMENT]);
+    vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId(`node-${PLACEMENT_ID}`);
+  }
+
+  it("Render button is absent when no placements exist", () => {
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    expect(screen.queryByRole("button", { name: /render/i })).not.toBeInTheDocument();
+  });
+
+  it("Render button is present when a placement exists", async () => {
+    await renderWithPlacement();
+    expect(screen.getByRole("button", { name: /render/i })).toBeInTheDocument();
+  });
+
+  it("clicking Render calls compose with correct scene/object ids", async () => {
+    vi.mocked(api.compose).mockResolvedValue(COMPOSE_RESPONSE);
+    await renderWithPlacement();
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await waitFor(() => {
+      expect(api.compose).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scene_id: SCENE_ID,
+          object_id: OBJECT_ID,
+        }),
+        expect.anything()
+      );
+    });
+  });
+
+  it("loading overlay is shown while rendering", async () => {
+    vi.mocked(api.compose).mockReturnValue(new Promise(() => {})); // never resolves
+    await renderWithPlacement();
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/composing scene/i)).toBeInTheDocument();
+    });
+  });
+
+  it("Cancel button aborts the request and hides the overlay", async () => {
+    vi.mocked(api.compose).mockImplementation(
+      (_req, signal) =>
+        new Promise<typeof COMPOSE_RESPONSE>((_resolve, reject) => {
+          signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError"))
+          );
+        })
+    );
+    await renderWithPlacement();
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await screen.findByText(/composing scene/i);
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/composing scene/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("error overlay is shown when compose rejects", async () => {
+    vi.mocked(api.compose).mockRejectedValue(new Error("compose failed: 504 upstream timeout"));
+    await renderWithPlacement();
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+  });
+
+  it("Retry button re-calls compose", async () => {
+    vi.mocked(api.compose)
+      .mockRejectedValueOnce(new Error("compose failed: 502"))
+      .mockResolvedValue(COMPOSE_RESPONSE);
+    await renderWithPlacement();
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => {
+      expect(api.compose).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("onRenderComplete is called with url and compositionId on success", async () => {
+    vi.mocked(api.compose).mockResolvedValue(COMPOSE_RESPONSE);
+    const onRenderComplete = vi.fn();
+    vi.mocked(db.loadPlacements).mockResolvedValue([MOCK_PLACEMENT]);
+    vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
+    render(<PlacementCanvas {...DEFAULT_PROPS} onRenderComplete={onRenderComplete} />);
+    await screen.findByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await waitFor(() => {
+      expect(onRenderComplete).toHaveBeenCalledWith({
+        url: COMPOSE_RESPONSE.image.url,
+        compositionId: COMPOSE_RESPONSE.composition_id,
+      });
     });
   });
 });

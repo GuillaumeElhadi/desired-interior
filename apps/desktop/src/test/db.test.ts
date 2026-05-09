@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ObjectRecord, PlacementRecord } from "../lib/db";
+import type { ObjectRecord, PlacementRecord, RenderRecord } from "../lib/db";
 
 // Mock tauri-plugin-sql before importing db module
 vi.mock("@tauri-apps/plugin-sql", () => ({
@@ -14,10 +14,12 @@ import {
   deletePlacement,
   loadObjects,
   loadPlacements,
+  loadRenders,
   removeObject,
   renameObject,
   saveObject,
   savePlacement,
+  saveRender,
   updatePlacement,
 } from "../lib/db";
 
@@ -212,6 +214,49 @@ describe("deletePlacement", () => {
       expect.stringContaining("DELETE FROM placements WHERE id"),
       [PLACEMENT.id]
     );
+  });
+});
+
+const RENDER: RenderRecord = {
+  id: "11111111-1111-4111-a111-111111111111",
+  scene_id: RECORD.scene_id,
+  composition_id: "c".repeat(64),
+  result_url: "https://cdn.fal.ai/result.jpg",
+  created_at: 1_700_000_002,
+};
+
+describe("saveRender", () => {
+  it("calls execute with INSERT OR IGNORE and all fields", async () => {
+    const mockDb = makeMockDb();
+    mockLoad.mockResolvedValue(mockDb);
+
+    await saveRender(RENDER);
+
+    expect(vi.mocked(mockDb.execute)).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT OR IGNORE"),
+      [RENDER.id, RENDER.scene_id, RENDER.composition_id, RENDER.result_url, RENDER.created_at]
+    );
+  });
+});
+
+describe("loadRenders", () => {
+  it("queries renders by scene_id in DESC order", async () => {
+    const mockDb = makeMockDb({ select: vi.fn().mockResolvedValue([RENDER]) });
+    mockLoad.mockResolvedValue(mockDb);
+
+    const result = await loadRenders(RENDER.scene_id);
+
+    expect(result).toEqual([RENDER]);
+    expect(vi.mocked(mockDb.select)).toHaveBeenCalledWith(expect.stringContaining("scene_id"), [
+      RENDER.scene_id,
+    ]);
+  });
+
+  it("returns empty array when no renders match", async () => {
+    const mockDb = makeMockDb({ select: vi.fn().mockResolvedValue([]) });
+    mockLoad.mockResolvedValue(mockDb);
+
+    expect(await loadRenders("no-scene")).toEqual([]);
   });
 });
 
