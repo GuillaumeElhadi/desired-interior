@@ -17,10 +17,12 @@ from app.cloud.fal_client import AsyncFalClient
 _log = structlog.get_logger()
 
 _DEPTH_ENDPOINT = "fal-ai/imageutils/depth"
-# SAM 2 in automatic/everything mode — pass image_url only, no prompts.
-# Returns all detected segments. If the live API requires prompts, add a
-# center-point fallback and update this constant.
-_SAM2_ENDPOINT = "fal-ai/sam2"
+# SAM 2 — the previous "fal-ai/sam2" everything-mode endpoint was removed.
+# "fal-ai/sam2/image" is the live replacement but is prompt-driven and
+# returns a single masked image (not a segment list), so _extract_masks
+# will return [] from it — which is handled gracefully throughout.
+# TODO: evaluate fal-ai/grounded-sam-2 or similar when available.
+_SAM2_ENDPOINT = "fal-ai/sam2/image"
 
 
 async def run_preprocessing(
@@ -36,7 +38,15 @@ async def run_preprocessing(
     depth_result, sam2_result = await asyncio.gather(
         fal.run(_DEPTH_ENDPOINT, {"image_url": image_data_url}),
         fal.run(_SAM2_ENDPOINT, {"image_url": image_data_url}),
+        return_exceptions=True,
     )
+
+    if isinstance(sam2_result, Exception):
+        _log.warning("sam2_unavailable", error=str(sam2_result))
+        sam2_result = {}
+
+    if isinstance(depth_result, Exception):
+        raise depth_result
 
     depth_map = _extract_depth_map(depth_result)
     masks = _extract_masks(sam2_result)
