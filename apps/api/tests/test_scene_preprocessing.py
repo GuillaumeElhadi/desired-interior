@@ -2,7 +2,7 @@
 
 import io
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -90,6 +90,7 @@ def mock_fal() -> AsyncMock:
     mock_run = AsyncMock(side_effect=[_DEPTH_RESPONSE, _SAM_RESPONSE])
     mock_client = MagicMock(spec=AsyncFalClient)
     mock_client.run = mock_run
+    mock_client.fetch_bytes = AsyncMock(return_value=_make_segmentation_png())
     app.dependency_overrides[get_fal_client] = lambda: mock_client
     yield mock_run
     app.dependency_overrides.clear()
@@ -266,16 +267,12 @@ def test_analyse_lighting_overhead() -> None:
 async def test_preprocess_cache_miss_calls_fal_and_caches(
     tmp_cache: Path, mock_fal: AsyncMock
 ) -> None:
-    seg_png = _make_segmentation_png()
-    with patch(
-        "app.scenes.preprocessing._fetch_png_bytes",
-        new=AsyncMock(return_value=seg_png),
-    ):
-        jpeg = _make_jpeg()
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post(
-                "/scenes/preprocess", files={"image": ("room.jpg", jpeg, "image/jpeg")}
-            )
+    # mock_fal fixture already configures fetch_bytes to return a synthetic PNG
+    jpeg = _make_jpeg()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/scenes/preprocess", files={"image": ("room.jpg", jpeg, "image/jpeg")}
+        )
 
     assert response.status_code == 200
     data = response.json()

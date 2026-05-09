@@ -10,11 +10,14 @@ import io
 from collections import defaultdict
 from typing import Any
 
-import httpx
 import structlog
 from PIL import Image, ImageStat
 
 from app.cloud.fal_client import AsyncFalClient
+
+# Pillow decompression-bomb guard: ~6700×6000 px, well above any realistic
+# segmentation or room photo size, prevents OOM from crafted images.
+Image.MAX_IMAGE_PIXELS = 40_000_000
 
 _log = structlog.get_logger()
 
@@ -61,7 +64,7 @@ async def run_preprocessing(
         raise depth_result
 
     depth_map = _extract_depth_map(depth_result)
-    masks = await _extract_masks_from_result(sam_result)
+    masks = await _extract_masks_from_result(sam_result, fal)
     metadata = _derive_metadata(masks, image_bytes)
 
     _log.info("scene_preprocess_done", masks_count=len(masks))
@@ -74,17 +77,20 @@ async def run_preprocessing(
 # ---------------------------------------------------------------------------
 
 
-async def _extract_masks_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+async def _extract_masks_from_result(
+    result: dict[str, Any], fal: AsyncFalClient
+) -> list[dict[str, Any]]:
     """Extract masks from a fal-ai/sam result.
 
-    fal-ai/sam returns a colour-coded segmentation image; we download it and
-    extract per-region bboxes with Pillow.  Falls back to the legacy list
-    format so the function stays forward-compatible with any future API change.
+    fal-ai/sam returns a colour-coded segmentation image; we download it via
+    the fal client and extract per-region bboxes with Pillow.  Falls back to
+    the legacy list format so the function stays forward-compatible with any
+    future API change.
     """
     sam_image_url = (result.get("image") or {}).get("url")
     if sam_image_url:
         try:
-            png_bytes = await _fetch_png_bytes(sam_image_url)
+            png_bytes = await fal.fetch_bytes(sam_image_url)
             masks = _regions_from_segmentation_png(png_bytes)
             if masks:
                 return masks
@@ -93,14 +99,6 @@ async def _extract_masks_from_result(result: dict[str, Any]) -> list[dict[str, A
 
     # Legacy path: structured masks list (forward-compat with any future API)
     return _extract_masks(result)
-
-
-async def _fetch_png_bytes(url: str) -> bytes:
-    """Download image bytes from a URL."""
-    async with httpx.AsyncClient(timeout=10.0) as http:
-        resp = await http.get(url)
-        resp.raise_for_status()
-        return resp.content
 
 
 def _regions_from_segmentation_png(png_bytes: bytes) -> list[dict[str, Any]]:
