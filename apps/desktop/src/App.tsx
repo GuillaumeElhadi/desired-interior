@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ObjectPanel } from "./components/ObjectPanel";
-import { RoomUpload } from "./components/RoomUpload";
+import { PlacementCanvas } from "./components/PlacementCanvas";
+import { RoomUpload, type SceneContext } from "./components/RoomUpload";
 import { checkHealth } from "./lib/api";
 
 interface HealthState {
@@ -37,7 +38,7 @@ async function waitForSidecar(signal: AbortSignal): Promise<{ version: string }>
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
-  const [sceneId, setSceneId] = useState<string | null>(null);
+  const [sceneCtx, setSceneCtx] = useState<SceneContext | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -64,21 +65,26 @@ function App() {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        {/* Room upload — left, centered */}
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
-          {!sceneId && (
+        {sceneCtx ? (
+          <>
+            <PlacementCanvas
+              sceneId={sceneCtx.sceneId}
+              imageUrl={sceneCtx.imageUrl}
+              masks={sceneCtx.masks}
+            />
+            <ObjectPanel sceneId={sceneCtx.sceneId} />
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900">Upload a room photo</h2>
               <p className="mt-1 text-sm text-gray-500">
                 We&apos;ll analyse the scene and prepare it for object placement.
               </p>
             </div>
-          )}
-          <RoomUpload disabled={health.status !== "ok"} onSceneReady={setSceneId} />
-        </div>
-
-        {/* Object panel — right */}
-        <ObjectPanel sceneId={sceneId} />
+            <RoomUpload disabled={health.status !== "ok"} onSceneReady={setSceneCtx} />
+          </div>
+        )}
       </main>
     </div>
   );

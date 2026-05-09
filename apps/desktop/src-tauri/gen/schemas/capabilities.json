@@ -10,7 +10,11 @@
         "identifier": "shell:allow-execute",
         "allow": [{ "name": "interior-vision-api", "sidecar": true }]
       },
-      "shell:allow-kill"
+      "shell:allow-kill",
+      "sql:allow-execute",
+      "sql:allow-select",
+      "sql:allow-close",
+      "sql:allow-load"
     ]
   }
 }

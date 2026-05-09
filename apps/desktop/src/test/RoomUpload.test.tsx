@@ -204,14 +204,18 @@ describe("RoomUpload — done state", () => {
     });
   });
 
-  it("calls onSceneReady with the scene_id", async () => {
+  it("calls onSceneReady with sceneId, imageUrl, and masks", async () => {
     mockPreprocess.mockResolvedValue(MOCK_PREPROCESS_RESPONSE);
     const onReady = vi.fn();
     render(<RoomUpload onSceneReady={onReady} />);
     const input = screen.getByLabelText(/choose room photo/i);
     await userEvent.upload(input, makeFile("room.jpg", "image/jpeg"));
     await waitFor(() => {
-      expect(onReady).toHaveBeenCalledWith(MOCK_SCENE_ID);
+      expect(onReady).toHaveBeenCalledWith({
+        sceneId: MOCK_SCENE_ID,
+        imageUrl: "blob:mock-object-url",
+        masks: [],
+      });
     });
   });
 });
