@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { checkHealth, getApiBaseUrl, postLog, preprocessScene } from "../lib/api";
+import { checkHealth, compose, getApiBaseUrl, postLog, preprocessScene } from "../lib/api";
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -81,6 +81,77 @@ describe("postLog", () => {
     setupInvokeMocks();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     await expect(postLog({ entries: [] })).rejects.toThrow("log upload failed: 500");
+  });
+});
+
+describe("compose", () => {
+  const COMPOSE_REQUEST = {
+    scene_id: "a".repeat(64),
+    object_id: "b".repeat(64),
+    placement: {
+      bbox: { x: 10, y: 20, width: 100, height: 80 },
+      depth_hint: 0.5,
+    },
+    style_hints: { prompt_suffix: "" },
+  };
+
+  const COMPOSE_RESPONSE = {
+    composition_id: "c".repeat(64),
+    image: { url: "https://cdn.fal.ai/result.jpg", content_type: "image/jpeg" },
+  };
+
+  it("POSTs JSON to /compose with auth header and returns parsed body", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(COMPOSE_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await compose(COMPOSE_REQUEST);
+
+    expect(result).toEqual(COMPOSE_RESPONSE);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:9999/compose",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(COMPOSE_REQUEST),
+      })
+    );
+  });
+
+  it("threads AbortSignal through to fetch", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(COMPOSE_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const ac = new AbortController();
+    await compose(COMPOSE_REQUEST, ac.signal);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: ac.signal })
+    );
+  });
+
+  it("throws with status when response is not ok", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 504,
+        text: () => Promise.resolve("upstream timeout"),
+      })
+    );
+    await expect(compose(COMPOSE_REQUEST)).rejects.toThrow("compose failed: 504");
   });
 });
 

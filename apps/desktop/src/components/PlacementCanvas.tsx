@@ -1,13 +1,14 @@
 import Konva from "konva";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
-import type { PreprocessResponse } from "../lib/api";
+import { type ComposeResponse, type PreprocessResponse, compose } from "../lib/api";
 import {
   type ObjectRecord,
   type PlacementRecord,
   deletePlacement,
   loadObjects,
   loadPlacements,
+  saveRender,
   savePlacement,
   updatePlacement,
 } from "../lib/db";
@@ -15,10 +16,18 @@ import {
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const SNAP_THRESHOLD = 0.2; // snap if within 20% of stage dims
 
+type RenderPhase = "idle" | "rendering" | "error";
+
+interface RenderResult {
+  url: string;
+  compositionId: string;
+}
+
 interface PlacementCanvasProps {
   sceneId: string;
   imageUrl: string;
   masks: PreprocessResponse["masks"];
+  onRenderComplete?: (result: RenderResult) => void;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -56,10 +65,16 @@ function snapToMask(
   return best ?? { x, y };
 }
 
-export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasProps) {
+export function PlacementCanvas({
+  sceneId,
+  imageUrl,
+  masks,
+  onRenderComplete,
+}: PlacementCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [roomImage, setRoomImage] = useState<HTMLImageElement | null>(null);
@@ -68,6 +83,8 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
     Map<string, { record: ObjectRecord; image: HTMLImageElement }>
   >(new Map());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [renderPhase, setRenderPhase] = useState<RenderPhase>("idle");
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   // Measure container
   useEffect(() => {
@@ -187,6 +204,76 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId]);
 
+  // Compute room image render size (letterbox fit) — hoisted for use in handleRender
+  const imgW = roomImage?.naturalWidth ?? 1;
+  const imgH = roomImage?.naturalHeight ?? 1;
+  const scale = Math.min(stageSize.width / imgW, stageSize.height / imgH);
+  const roomRenderW = imgW * scale;
+  const roomRenderH = imgH * scale;
+  const roomOffsetX = (stageSize.width - roomRenderW) / 2;
+  const roomOffsetY = (stageSize.height - roomRenderH) / 2;
+
+  const handleRender = useCallback(async () => {
+    const target = placements.find((p) => p.id === selectedId) ?? placements[placements.length - 1];
+    if (!target) return;
+    const entry = objectsMap.get(target.object_id);
+    if (!entry) return;
+
+    const bbox = {
+      x: (target.x - roomOffsetX) / scale,
+      y: (target.y - roomOffsetY) / scale,
+      width: (entry.image.naturalWidth * target.scale_x) / scale,
+      height: (entry.image.naturalHeight * target.scale_y) / scale,
+    };
+
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setRenderPhase("rendering");
+    setRenderError(null);
+
+    try {
+      const result: ComposeResponse = await compose(
+        {
+          scene_id: sceneId,
+          object_id: target.object_id,
+          placement: { bbox, depth_hint: target.depth_hint },
+          style_hints: { prompt_suffix: "" },
+        },
+        ac.signal
+      );
+      await saveRender({
+        id: crypto.randomUUID(),
+        scene_id: sceneId,
+        composition_id: result.composition_id,
+        result_url: result.image.url,
+        created_at: Date.now(),
+      });
+      setRenderPhase("idle");
+      onRenderComplete?.({ url: result.image.url, compositionId: result.composition_id });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setRenderPhase("idle");
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setRenderPhase("error");
+        setRenderError(msg);
+      }
+    }
+  }, [
+    placements,
+    selectedId,
+    objectsMap,
+    sceneId,
+    scale,
+    roomOffsetX,
+    roomOffsetY,
+    onRenderComplete,
+  ]);
+
+  const handleCancelRender = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
@@ -274,15 +361,6 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
     },
     []
   );
-
-  // Compute room image render size (letterbox fit)
-  const imgW = roomImage?.naturalWidth ?? 1;
-  const imgH = roomImage?.naturalHeight ?? 1;
-  const scale = Math.min(stageSize.width / imgW, stageSize.height / imgH);
-  const roomRenderW = imgW * scale;
-  const roomRenderH = imgH * scale;
-  const roomOffsetX = (stageSize.width - roomRenderW) / 2;
-  const roomOffsetY = (stageSize.height - roomRenderH) / 2;
 
   return (
     <div
@@ -382,6 +460,59 @@ export function PlacementCanvas({ sceneId, imageUrl, masks }: PlacementCanvasPro
             </div>
           );
         })()}
+
+      {/* Render button — shown when idle and at least one placement exists */}
+      {placements.length > 0 && renderPhase === "idle" && (
+        <div className="absolute right-4 top-4 z-10">
+          <button
+            type="button"
+            onClick={() => void handleRender()}
+            className="rounded-lg bg-brand-accent px-4 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand-accent focus:ring-offset-2"
+          >
+            Render
+          </button>
+        </div>
+      )}
+
+      {/* Loading overlay */}
+      {renderPhase === "rendering" && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="motion-safe:animate-spin h-10 w-10 rounded-full border-4 border-white/30 border-t-white" />
+          <p className="mt-4 text-sm font-medium text-white">Composing scene…</p>
+          <button
+            type="button"
+            onClick={handleCancelRender}
+            className="mt-3 text-xs text-white/70 underline underline-offset-2 hover:text-white"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {renderPhase === "error" && renderError && (
+        <div className="absolute right-4 top-4 z-10 flex max-w-xs flex-col items-end gap-2">
+          <div role="alert" className="rounded-lg bg-red-900/80 px-3 py-2 text-xs text-red-100">
+            {renderError}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setRenderPhase("idle")}
+              className="text-xs text-white/60 underline underline-offset-2 hover:text-white/90"
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleRender()}
+              className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

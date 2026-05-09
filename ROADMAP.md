@@ -316,12 +316,12 @@
 
 ### 3.4 Render trigger + result view
 
-- [ ] Branch: `feat/render-flow`
+- [x] Branch: `feat/render-flow`
 - "Render" button → composition request → loading state with intermediate previews if available → result panel with before/after slider
 - Save result to project history
 - **Acceptance:**
-  - [ ] Cancel mid-render works (request aborted server-side)
-  - [ ] Failed render shows actionable error
+  - [x] Cancel mid-render works (request aborted server-side)
+  - [x] Failed render shows actionable error
 
 ### 3.5 Project history + multi-iteration
 

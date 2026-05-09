@@ -125,3 +125,31 @@ export async function deletePlacement(id: string): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM placements WHERE id = $1", [id]);
 }
+
+// ---------------------------------------------------------------------------
+// Renders (task 3.4)
+// ---------------------------------------------------------------------------
+
+export interface RenderRecord {
+  id: string;
+  scene_id: string;
+  composition_id: string;
+  result_url: string;
+  created_at: number;
+}
+
+export async function saveRender(record: RenderRecord): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT OR IGNORE INTO renders (id, scene_id, composition_id, result_url, created_at) VALUES ($1, $2, $3, $4, $5)",
+    [record.id, record.scene_id, record.composition_id, record.result_url, record.created_at]
+  );
+}
+
+export async function loadRenders(sceneId: string): Promise<RenderRecord[]> {
+  const db = await getDb();
+  return db.select<RenderRecord[]>(
+    "SELECT * FROM renders WHERE scene_id = $1 ORDER BY created_at DESC",
+    [sceneId]
+  );
+}
