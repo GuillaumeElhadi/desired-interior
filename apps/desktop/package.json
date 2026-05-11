@@ -24,8 +24,8 @@
     "react-konva": "18.2.2"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.4",
-    "@tauri-apps/cli": "^2.11.0",
+    "@tailwindcss/vite": "^4.3.0",
+    "@tauri-apps/cli": "^2.11.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -35,10 +35,10 @@
     "@vitest/coverage-v8": "^4.1.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^29.1.1",
-    "tailwindcss": "^4.2.4",
+    "tailwindcss": "^4.3.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.59.1",
-    "vite": "^8.0.10",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.11",
     "vitest": "^4.1.5"
   }
 }
