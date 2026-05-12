@@ -347,11 +347,11 @@
 
 ### 4.1 Two-pass rendering (preview → final)
 
-- [ ] Branch: `feat/two-pass-render`
+- [x] Branch: `feat/two-pass-render`
 - Use Flux Schnell (fewer steps, ~1-2s) for live preview during placement; trigger Flux Fill Dev only on explicit "Render" click
 - **Acceptance:**
-  - [ ] Preview latency < 3s p95
-  - [ ] User-perceptible quality jump on final render
+  - [x] Preview latency < 3s p95
+  - [x] User-perceptible quality jump on final render
 
 ### 4.2 Settings panel
 

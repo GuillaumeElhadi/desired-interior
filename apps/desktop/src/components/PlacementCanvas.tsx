@@ -1,7 +1,7 @@
 import Konva from "konva";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
-import { type ComposeResponse, type PreprocessResponse, compose } from "../lib/api";
+import { type ComposeResponse, type PreprocessResponse, compose, composePreview } from "../lib/api";
 import {
   type ObjectRecord,
   type PlacementRecord,
@@ -15,8 +15,10 @@ import {
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const SNAP_THRESHOLD = 0.2; // snap if within 20% of stage dims
+const PREVIEW_DEBOUNCE_MS = 800;
 
 type RenderPhase = "idle" | "rendering" | "error";
+type PreviewPhase = "idle" | "pending" | "generating" | "ready" | "error";
 
 interface RenderResult {
   url: string;
@@ -75,6 +77,9 @@ export function PlacementCanvas({
   const trRef = useRef<Konva.Transformer>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewGenRef = useRef(0);
 
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [roomImage, setRoomImage] = useState<HTMLImageElement | null>(null);
@@ -85,6 +90,8 @@ export function PlacementCanvas({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renderPhase, setRenderPhase] = useState<RenderPhase>("idle");
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("idle");
+  const [previewImage, setPreviewImage] = useState<HTMLImageElement | null>(null);
 
   // Measure container
   useEffect(() => {
@@ -102,6 +109,34 @@ export function PlacementCanvas({
   useEffect(() => {
     loadImage(imageUrl).then(setRoomImage).catch(console.error);
   }, [imageUrl]);
+
+  // Abort in-flight preview requests when scene changes (timer + abort are side effects)
+  useEffect(() => {
+    if (previewDebounceRef.current !== null) {
+      clearTimeout(previewDebounceRef.current);
+      previewDebounceRef.current = null;
+    }
+    previewAbortRef.current?.abort();
+  }, [imageUrl]);
+
+  // Reset preview state when imageUrl changes — using render-time setState (React 18 pattern)
+  // avoids triggering the react-hooks/set-state-in-effect rule.
+  const [prevImageUrl, setPrevImageUrl] = useState(imageUrl);
+  if (prevImageUrl !== imageUrl) {
+    setPrevImageUrl(imageUrl);
+    setPreviewPhase("idle");
+    setPreviewImage(null);
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (previewDebounceRef.current !== null) {
+        clearTimeout(previewDebounceRef.current);
+      }
+      previewAbortRef.current?.abort();
+    };
+  }, []);
 
   // Load placements + objects from DB
   useEffect(() => {
@@ -212,6 +247,61 @@ export function PlacementCanvas({
   const roomRenderH = imgH * scale;
   const roomOffsetX = (stageSize.width - roomRenderW) / 2;
   const roomOffsetY = (stageSize.height - roomRenderH) / 2;
+
+  const triggerPreview = useCallback(async () => {
+    const target = placements[placements.length - 1];
+    if (!target) return;
+    const entry = objectsMap.get(target.object_id);
+    if (!entry) return;
+
+    const bbox = {
+      x: (target.x - roomOffsetX) / scale,
+      y: (target.y - roomOffsetY) / scale,
+      width: (entry.image.naturalWidth * target.scale_x) / scale,
+      height: (entry.image.naturalHeight * target.scale_y) / scale,
+    };
+    if (bbox.width <= 0 || bbox.height <= 0) return;
+
+    const gen = ++previewGenRef.current;
+    const ac = new AbortController();
+    previewAbortRef.current = ac;
+    setPreviewPhase("generating");
+
+    try {
+      const result = await composePreview(
+        {
+          scene_id: sceneId,
+          object_id: target.object_id,
+          placement: { bbox, depth_hint: target.depth_hint },
+          style_hints: { prompt_suffix: "" },
+        },
+        ac.signal
+      );
+      const img = await loadImage(result.image.url);
+      if (previewGenRef.current !== gen) return;
+      setPreviewImage(img);
+      setPreviewPhase("ready");
+    } catch (err: unknown) {
+      if (previewGenRef.current !== gen) return;
+      if (err instanceof Error && err.name === "AbortError") {
+        setPreviewPhase("idle");
+      } else {
+        setPreviewPhase("error");
+      }
+    }
+  }, [placements, objectsMap, sceneId, scale, roomOffsetX, roomOffsetY]);
+
+  const schedulePreview = useCallback(() => {
+    if (previewDebounceRef.current !== null) {
+      clearTimeout(previewDebounceRef.current);
+    }
+    previewAbortRef.current?.abort();
+    setPreviewPhase("pending");
+    previewDebounceRef.current = setTimeout(() => {
+      previewDebounceRef.current = null;
+      void triggerPreview();
+    }, PREVIEW_DEBOUNCE_MS);
+  }, [triggerPreview]);
 
   const handleRender = useCallback(async () => {
     const target = placements.find((p) => p.id === selectedId) ?? placements[placements.length - 1];
@@ -326,8 +416,9 @@ export function PlacementCanvas({
       setPlacements((prev) => [...prev, placement]);
       setSelectedId(placement.id);
       containerRef.current?.focus();
+      schedulePreview();
     },
-    [objectsMap, sceneId, masks, stageSize]
+    [objectsMap, sceneId, masks, stageSize, schedulePreview]
   );
 
   const handleDragEnd = useCallback(
@@ -341,8 +432,9 @@ export function PlacementCanvas({
           return updated;
         })
       );
+      schedulePreview();
     },
-    []
+    [schedulePreview]
   );
 
   const handleTransformEnd = useCallback(
@@ -364,8 +456,9 @@ export function PlacementCanvas({
           return updated;
         })
       );
+      schedulePreview();
     },
-    []
+    [schedulePreview]
   );
 
   return (
@@ -390,9 +483,9 @@ export function PlacementCanvas({
         }}
       >
         <Layer>
-          {roomImage && (
+          {(previewImage ?? roomImage) && (
             <KonvaImage
-              image={roomImage}
+              image={(previewImage ?? roomImage)!}
               x={roomOffsetX}
               y={roomOffsetY}
               width={roomRenderW}
@@ -433,6 +526,43 @@ export function PlacementCanvas({
           />
         </Layer>
       </Stage>
+
+      {/* Preview status badge — top-left corner; hidden when no placements */}
+      {previewPhase !== "idle" && placements.length > 0 && (
+        <div
+          className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm"
+          aria-live="polite"
+          aria-label={
+            previewPhase === "pending"
+              ? "Preview pending"
+              : previewPhase === "generating"
+                ? "Generating preview"
+                : previewPhase === "ready"
+                  ? "Preview ready"
+                  : "Preview unavailable"
+          }
+        >
+          {previewPhase === "pending" || previewPhase === "generating" ? (
+            <>
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin"
+                aria-hidden="true"
+              />
+              <span>{previewPhase === "pending" ? "Preview…" : "Generating preview…"}</span>
+            </>
+          ) : previewPhase === "ready" ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-green-400" aria-hidden="true" />
+              <span>Preview</span>
+            </>
+          ) : (
+            <>
+              <span className="h-2 w-2 rounded-full bg-red-400" aria-hidden="true" />
+              <span>Preview unavailable</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Depth hint slider for selected placement */}
       {selectedId &&

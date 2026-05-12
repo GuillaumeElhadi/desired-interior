@@ -8,6 +8,7 @@ export type PreprocessResponse = components["schemas"]["PreprocessResponse"];
 export type ExtractResponse = components["schemas"]["ExtractResponse"];
 export type ComposeRequest = components["schemas"]["ComposeRequest"];
 export type ComposeResponse = components["schemas"]["ComposeResponse"];
+export type PreviewComposeResponse = components["schemas"]["PreviewComposeResponse"];
 
 export async function getApiBaseUrl(): Promise<string> {
   return invoke<string>("api_base_url");
@@ -82,6 +83,24 @@ export async function compose(
     throw new Error(`compose failed: ${response.status} ${msg}`);
   }
   return response.json() as Promise<ComposeResponse>;
+}
+
+export async function composePreview(
+  request: ComposeRequest,
+  signal?: AbortSignal
+): Promise<PreviewComposeResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const response = await fetchWithAuth(`${baseUrl}/compose/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  if (!response.ok) {
+    const msg = await response.text().catch(() => response.statusText);
+    throw new Error(`composePreview failed: ${response.status} ${msg}`);
+  }
+  return response.json() as Promise<PreviewComposeResponse>;
 }
 
 export async function postLog(body: LogRequest): Promise<void> {

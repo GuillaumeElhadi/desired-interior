@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlacementCanvas } from "../components/PlacementCanvas";
 import * as api from "../lib/api";
@@ -45,6 +45,7 @@ vi.mock("../lib/db", () => ({
 
 vi.mock("../lib/api", () => ({
   compose: vi.fn(),
+  composePreview: vi.fn(),
 }));
 
 const SCENE_ID = "a".repeat(64);
@@ -350,5 +351,128 @@ describe("PlacementCanvas — render flow", () => {
         compositionId: COMPOSE_RESPONSE.composition_id,
       });
     });
+  });
+
+  it("Render button calls compose (not composePreview) even when preview is active", async () => {
+    vi.mocked(api.compose).mockResolvedValue(COMPOSE_RESPONSE);
+    vi.mocked(api.composePreview).mockReturnValue(new Promise(() => {}));
+    await renderWithPlacement();
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await waitFor(() => {
+      expect(api.compose).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe("PlacementCanvas — preview", () => {
+  const PREVIEW_RESPONSE = {
+    preview_id: "d".repeat(64),
+    image: { url: "https://cdn.fal.ai/preview.jpg", content_type: "image/jpeg" },
+  };
+
+  async function dropObject() {
+    vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(db.loadObjects).toHaveBeenCalled());
+    const region = screen.getByRole("region", { name: /placement canvas/i });
+    await act(async () => {
+      fireEvent.drop(region, {
+        dataTransfer: { getData: () => OBJECT_ID },
+        clientX: 300,
+        clientY: 300,
+      });
+    });
+    await waitFor(() => expect(db.savePlacement).toHaveBeenCalled());
+  }
+
+  it("no preview badge is shown when no placements exist", () => {
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    expect(screen.queryByText(/preview/i)).not.toBeInTheDocument();
+  });
+
+  it("badge shows 'Preview…' immediately after drop (debounce pending)", async () => {
+    vi.mocked(api.composePreview).mockReturnValue(new Promise(() => {}));
+    await dropObject();
+    expect(screen.getByText(/preview…/i)).toBeInTheDocument();
+  });
+
+  it("composePreview is called after 800ms debounce", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.composePreview).mockReturnValue(new Promise(() => {}));
+
+    await dropObject();
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+
+    expect(api.composePreview).toHaveBeenCalledTimes(1);
+    expect(api.composePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ scene_id: SCENE_ID, object_id: OBJECT_ID }),
+      expect.any(AbortSignal)
+    );
+    vi.useRealTimers();
+  });
+
+  it("badge shows 'Generating preview…' after debounce fires", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.composePreview).mockReturnValue(new Promise(() => {}));
+
+    await dropObject();
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+
+    expect(screen.getByText(/generating preview…/i)).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("badge shows 'Preview' when preview succeeds", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.composePreview).mockResolvedValue(PREVIEW_RESPONSE);
+
+    await dropObject();
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByText(/^preview$/i)).toBeInTheDocument());
+  });
+
+  it("badge shows 'Preview unavailable' when composePreview rejects", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.composePreview).mockRejectedValue(new Error("preview failed: 502"));
+
+    await dropObject();
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByText(/preview unavailable/i)).toBeInTheDocument());
+  });
+
+  it("preview badge is cleared when imageUrl prop changes", async () => {
+    vi.mocked(api.composePreview).mockReturnValue(new Promise(() => {}));
+
+    const { rerender } = render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(db.loadObjects).toHaveBeenCalled());
+
+    const region = screen.getByRole("region", { name: /placement canvas/i });
+    await act(async () => {
+      fireEvent.drop(region, {
+        dataTransfer: { getData: () => OBJECT_ID },
+        clientX: 300,
+        clientY: 300,
+      });
+    });
+    await waitFor(() => expect(screen.getByText(/preview…/i)).toBeInTheDocument());
+
+    rerender(<PlacementCanvas {...DEFAULT_PROPS} imageUrl="blob:new-room-image" />);
+    await waitFor(() => expect(screen.queryByText(/preview/i)).not.toBeInTheDocument());
   });
 });

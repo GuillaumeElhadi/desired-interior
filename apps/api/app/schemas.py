@@ -130,6 +130,11 @@ class ComposeResponse(BaseModel):
     image: ComposedImage
 
 
+class PreviewComposeResponse(BaseModel):
+    preview_id: str
+    image: ComposedImage
+
+
 # ErrorResponse is backend-internal: used by _RequestIdMiddleware to build the
 # JSON 500 body. It is not registered as a FastAPI response model and therefore
 # does not appear in openapi.json or packages/shared-types. The shape is
