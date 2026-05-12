@@ -33,12 +33,19 @@ interface PlacementCanvasProps {
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
+  // Try with CORS first (needed for canvas export). If it fails — e.g. the CDN
+  // doesn't allow the Tauri origin — retry without so the image still renders.
   return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
+    const withCors = new window.Image();
+    withCors.crossOrigin = "anonymous";
+    withCors.onload = () => resolve(withCors);
+    withCors.onerror = () => {
+      const noCors = new window.Image();
+      noCors.onload = () => resolve(noCors);
+      noCors.onerror = reject;
+      noCors.src = url;
+    };
+    withCors.src = url;
   });
 }
 
@@ -386,7 +393,8 @@ export function PlacementCanvas({
           const img = await loadImage(obj.masked_url);
           entry = { record: obj, image: img };
           setObjectsMap((prev) => new Map(prev).set(objectId, entry!));
-        } catch {
+        } catch (err) {
+          console.error("[PlacementCanvas] failed to load object image:", obj.masked_url, err);
           return;
         }
       }
