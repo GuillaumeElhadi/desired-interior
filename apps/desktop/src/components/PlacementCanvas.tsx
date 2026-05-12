@@ -30,6 +30,10 @@ interface PlacementCanvasProps {
   imageUrl: string;
   masks: PreprocessResponse["masks"];
   onRenderComplete?: (result: RenderResult) => void;
+  /** Object ID selected in the panel waiting to be placed on the canvas. */
+  pendingObjectId?: string | null;
+  /** Called after the pending object has been placed so the parent can clear it. */
+  onPendingObjectPlaced?: () => void;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -79,6 +83,8 @@ export function PlacementCanvas({
   imageUrl,
   masks,
   onRenderComplete,
+  pendingObjectId,
+  onPendingObjectPlaced,
 }: PlacementCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -377,6 +383,50 @@ export function PlacementCanvas({
     abortRef.current?.abort();
   }, []);
 
+  const handleClickPlace = useCallback(
+    async (clickX: number, clickY: number) => {
+      if (!pendingObjectId) return;
+
+      let entry = objectsMap.get(pendingObjectId);
+      if (!entry) {
+        const objs = await loadObjects(sceneId);
+        const obj = objs.find((o) => o.id === pendingObjectId);
+        if (!obj) return;
+        try {
+          const img = await loadImage(obj.masked_url);
+          entry = { record: obj, image: img };
+          setObjectsMap((prev) => new Map(prev).set(pendingObjectId, entry!));
+        } catch (err) {
+          console.error("[PlacementCanvas] failed to load object image:", err);
+          return;
+        }
+      }
+
+      const { x, y } = snapToMask(clickX, clickY, masks, stageSize.width, stageSize.height);
+
+      const placement: PlacementRecord = {
+        id: crypto.randomUUID(),
+        scene_id: sceneId,
+        object_id: pendingObjectId,
+        x: x - (entry.image.naturalWidth * 0.15) / 2,
+        y: y - (entry.image.naturalHeight * 0.15) / 2,
+        scale_x: 0.15,
+        scale_y: 0.15,
+        rotation: 0,
+        depth_hint: 0.5,
+        updated_at: Date.now(),
+      };
+
+      await savePlacement(placement);
+      setPlacements((prev) => [...prev, placement]);
+      setSelectedId(placement.id);
+      containerRef.current?.focus();
+      onPendingObjectPlaced?.();
+      schedulePreview();
+    },
+    [pendingObjectId, objectsMap, sceneId, masks, stageSize, onPendingObjectPlaced, schedulePreview]
+  );
+
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
@@ -490,7 +540,12 @@ export function PlacementCanvas({
         height={stageSize.height}
         onClick={(e) => {
           const target = e.target as Konva.Node;
-          if (typeof target.getStage === "function" && target === target.getStage()) {
+          const isBackground =
+            typeof target.getStage === "function" && target === target.getStage();
+          if (pendingObjectId && isBackground) {
+            const pos = stageRef.current?.getPointerPosition();
+            if (pos) void handleClickPlace(pos.x, pos.y);
+          } else if (isBackground) {
             setSelectedId(null);
           }
         }}
@@ -539,6 +594,15 @@ export function PlacementCanvas({
           />
         </Layer>
       </Stage>
+
+      {/* Pending placement hint */}
+      {pendingObjectId && (
+        <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
+          <div className="rounded-full bg-brand-accent/90 px-4 py-1.5 text-xs font-medium text-white shadow backdrop-blur-sm">
+            Click on the photo to place the object
+          </div>
+        </div>
+      )}
 
       {/* Persistent live region — always in DOM so VoiceOver announces phase changes reliably */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">

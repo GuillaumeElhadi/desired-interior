@@ -46,6 +46,7 @@ function App() {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
   const [sceneCtx, setSceneCtx] = useState<SceneContext | null>(null);
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
+  const [pendingObjectId, setPendingObjectId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -89,8 +90,14 @@ function App() {
               imageUrl={sceneCtx.imageUrl}
               masks={sceneCtx.masks}
               onRenderComplete={setRenderResult}
+              pendingObjectId={pendingObjectId}
+              onPendingObjectPlaced={() => setPendingObjectId(null)}
             />
-            <ObjectPanel sceneId={sceneCtx.sceneId} />
+            <ObjectPanel
+              sceneId={sceneCtx.sceneId}
+              pendingObjectId={pendingObjectId}
+              onObjectSelect={(id) => setPendingObjectId((prev) => (prev === id ? null : id))}
+            />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">

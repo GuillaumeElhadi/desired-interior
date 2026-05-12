@@ -6,6 +6,10 @@ interface ObjectPanelProps {
   sceneId: string | null;
   /** Called when the user starts dragging an object toward the canvas. */
   onObjectDragStart?: (objectId: string) => void;
+  /** Called when the user clicks an object to select it for placement. */
+  onObjectSelect?: (objectId: string) => void;
+  /** The object currently selected for placement (highlighted in the panel). */
+  pendingObjectId?: string | null;
 }
 
 const ACCEPTED_MIME = new Set([
@@ -16,7 +20,12 @@ const ACCEPTED_MIME = new Set([
   "image/heif",
 ]);
 
-export function ObjectPanel({ sceneId, onObjectDragStart }: ObjectPanelProps) {
+export function ObjectPanel({
+  sceneId,
+  onObjectDragStart,
+  onObjectSelect,
+  pendingObjectId,
+}: ObjectPanelProps) {
   const [objects, setObjects] = useState<ObjectRecord[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -183,8 +192,13 @@ export function ObjectPanel({ sceneId, onObjectDragStart }: ObjectPanelProps) {
                 e.dataTransfer.effectAllowed = "copy";
                 onObjectDragStart?.(obj.id);
               }}
-              className="flex cursor-grab items-center gap-3 rounded-lg p-2 hover:bg-gray-50 active:cursor-grabbing"
-              aria-label={`Object: ${obj.name}`}
+              onClick={() => onObjectSelect?.(obj.id)}
+              className={[
+                "flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-50",
+                pendingObjectId === obj.id ? "ring-2 ring-brand-accent bg-brand-accent/5" : "",
+              ].join(" ")}
+              aria-label={`Object: ${obj.name}${pendingObjectId === obj.id ? " — click canvas to place" : ""}`}
+              aria-pressed={pendingObjectId === obj.id}
             >
               {/* Thumbnail */}
               <img
