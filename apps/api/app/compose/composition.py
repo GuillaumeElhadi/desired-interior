@@ -24,7 +24,8 @@ from app.schemas import PlacementSpec, StyleHints
 
 _log = structlog.get_logger()
 
-_FLUX_FILL_ENDPOINT = "fal-ai/flux-pro/v1/fill"
+_FLUX_LORA_INPAINTING_ENDPOINT = "fal-ai/flux-lora/inpainting"
+_FINAL_STEPS = 28
 
 _DEFAULT_PROMPT = (
     "Photorealistic furniture piece placed in the room, matching perspective, "
@@ -73,11 +74,12 @@ async def run_composition(
     )
 
     result = await fal.run(
-        _FLUX_FILL_ENDPOINT,
+        _FLUX_LORA_INPAINTING_ENDPOINT,
         {
             "image_url": scene_data_url,
             "mask_url": mask_data_url,
             "prompt": prompt,
+            "num_inference_steps": _FINAL_STEPS,
         },
     )
 

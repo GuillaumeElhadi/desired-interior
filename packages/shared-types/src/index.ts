@@ -55,6 +55,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/compose/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Compose Preview */
+    post: operations["compose_preview_compose_preview_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -261,6 +278,12 @@ export interface components {
       masks: components["schemas"]["MaskResult"][];
       metadata: components["schemas"]["SceneMetadata"];
     };
+    /** PreviewComposeResponse */
+    PreviewComposeResponse: {
+      /** Preview Id */
+      preview_id: string;
+      image: components["schemas"]["ComposedImage"];
+    };
     /** SceneMetadata */
     SceneMetadata: {
       /** Dominant Surface */
@@ -394,6 +417,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ComposeResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  compose_preview_compose_preview_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ComposeRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PreviewComposeResponse"];
         };
       };
       /** @description Validation Error */

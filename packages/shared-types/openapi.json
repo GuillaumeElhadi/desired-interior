@@ -176,6 +176,63 @@
         }
       }
     },
+    "/compose/preview": {
+      "post": {
+        "tags": ["compose"],
+        "summary": "Compose Preview",
+        "operationId": "compose_preview_compose_preview_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewComposeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -586,6 +643,20 @@
         "type": "object",
         "required": ["scene_id", "depth_map", "masks", "metadata"],
         "title": "PreprocessResponse"
+      },
+      "PreviewComposeResponse": {
+        "properties": {
+          "preview_id": {
+            "type": "string",
+            "title": "Preview Id"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ComposedImage"
+          }
+        },
+        "type": "object",
+        "required": ["preview_id", "image"],
+        "title": "PreviewComposeResponse"
       },
       "SceneMetadata": {
         "properties": {

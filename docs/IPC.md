@@ -28,13 +28,14 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 
 ## HTTP endpoints
 
-| Method | Path                 | Description                | Request body                          | Response body / status      |
-| ------ | -------------------- | -------------------------- | ------------------------------------- | --------------------------- |
-| `GET`  | `/health`            | Liveness probe             | —                                     | `HealthResponse` (JSON)     |
-| `POST` | `/logs`              | Receive frontend logs      | `LogRequest` (JSON)                   | `204 No Content`            |
-| `POST` | `/scenes/preprocess` | Scene depth + segmentation | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON) |
-| `POST` | `/objects/extract`   | Object background removal  | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)    |
-| `POST` | `/compose`           | Compose object into scene  | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)    |
+| Method | Path                 | Description                        | Request body                          | Response body / status          |
+| ------ | -------------------- | ---------------------------------- | ------------------------------------- | ------------------------------- |
+| `GET`  | `/health`            | Liveness probe                     | —                                     | `HealthResponse` (JSON)         |
+| `POST` | `/logs`              | Receive frontend logs              | `LogRequest` (JSON)                   | `204 No Content`                |
+| `POST` | `/scenes/preprocess` | Scene depth + segmentation         | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
+| `POST` | `/objects/extract`   | Object background removal          | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
+| `POST` | `/compose/preview`   | Fast preview composite (4 steps)   | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
+| `POST` | `/compose`           | Final quality composite (28 steps) | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -86,7 +87,23 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
 }
 ```
 
-**Latency budget**: ≤ 15 s p95 for 1024×1024 (Flux Fill). Cached compositions are returned in < 50 ms.
+**Latency budget (final)**: ≤ 15 s p95 for 1024×1024 (Flux Dev, 28 steps). Cached compositions returned in < 50 ms.
+
+### `PreviewComposeResponse` schema
+
+```json
+{
+  "preview_id": "<SHA-256 of the composition inputs — used as preview cache key>",
+  "image": {
+    "url": "<fal.ai CDN URL of the preview JPEG>",
+    "content_type": "image/jpeg"
+  }
+}
+```
+
+**Latency budget (preview)**: ≤ 3 s p95 for 1024×1024 (Flux Dev at 4 steps). Cached previews returned in < 50 ms.
+
+The preview endpoint accepts the same `ComposeRequest` body as `/compose`. The preview cache (`~/Library/Caches/InteriorVision/preview/`) is kept separate from the final-render cache so quality tiers never intermix.
 
 ### Error response schema
 
