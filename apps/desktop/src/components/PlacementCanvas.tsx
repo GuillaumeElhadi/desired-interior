@@ -249,7 +249,7 @@ export function PlacementCanvas({
   const roomOffsetY = (stageSize.height - roomRenderH) / 2;
 
   const triggerPreview = useCallback(async () => {
-    const target = placements[placements.length - 1];
+    const target = placements.find((p) => p.id === selectedId) ?? placements[placements.length - 1];
     if (!target) return;
     const entry = objectsMap.get(target.object_id);
     if (!entry) return;
@@ -289,7 +289,7 @@ export function PlacementCanvas({
         setPreviewPhase("error");
       }
     }
-  }, [placements, objectsMap, sceneId, scale, roomOffsetX, roomOffsetY]);
+  }, [placements, objectsMap, sceneId, scale, roomOffsetX, roomOffsetY, selectedId]);
 
   const schedulePreview = useCallback(() => {
     if (previewDebounceRef.current !== null) {
@@ -527,25 +527,21 @@ export function PlacementCanvas({
         </Layer>
       </Stage>
 
+      {/* Persistent live region — always in DOM so VoiceOver announces phase changes reliably */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {previewPhase === "pending" && placements.length > 0 && "Preview pending"}
+        {previewPhase === "generating" && placements.length > 0 && "Generating preview"}
+        {previewPhase === "ready" && placements.length > 0 && "Preview ready"}
+        {previewPhase === "error" && placements.length > 0 && "Preview unavailable"}
+      </div>
+
       {/* Preview status badge — top-left corner; hidden when no placements */}
       {previewPhase !== "idle" && placements.length > 0 && (
-        <div
-          className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm"
-          aria-live="polite"
-          aria-label={
-            previewPhase === "pending"
-              ? "Preview pending"
-              : previewPhase === "generating"
-                ? "Generating preview"
-                : previewPhase === "ready"
-                  ? "Preview ready"
-                  : "Preview unavailable"
-          }
-        >
+        <div className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
           {previewPhase === "pending" || previewPhase === "generating" ? (
             <>
               <span
-                className="inline-block h-2.5 w-2.5 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin"
+                className="inline-block h-2 w-2 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin"
                 aria-hidden="true"
               />
               <span>{previewPhase === "pending" ? "Preview…" : "Generating preview…"}</span>

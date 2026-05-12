@@ -439,7 +439,7 @@ describe("PlacementCanvas — preview", () => {
     });
 
     vi.useRealTimers();
-    await waitFor(() => expect(screen.getByText(/^preview$/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/^preview$/i).length).toBeGreaterThan(0));
   });
 
   it("badge shows 'Preview unavailable' when composePreview rejects", async () => {
@@ -453,7 +453,10 @@ describe("PlacementCanvas — preview", () => {
     });
 
     vi.useRealTimers();
-    await waitFor(() => expect(screen.getByText(/preview unavailable/i)).toBeInTheDocument());
+    // Both the visible badge and the sr-only live region will contain this text
+    await waitFor(() =>
+      expect(screen.getAllByText(/preview unavailable/i).length).toBeGreaterThan(0)
+    );
   });
 
   it("preview badge is cleared when imageUrl prop changes", async () => {
