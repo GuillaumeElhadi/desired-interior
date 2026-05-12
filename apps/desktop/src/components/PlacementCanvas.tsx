@@ -380,8 +380,13 @@ export function PlacementCanvas({
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
-      const objectId = e.dataTransfer.getData("application/x-interior-vision-object");
-      if (!SHA256_RE.test(objectId)) return;
+      const objectId =
+        e.dataTransfer.getData("application/x-interior-vision-object") ||
+        e.dataTransfer.getData("text/plain");
+      if (!SHA256_RE.test(objectId)) {
+        console.warn("[PlacementCanvas] drop ignored — objectId not a SHA-256:", objectId);
+        return;
+      }
 
       // Load object image if not yet in map
       let entry = objectsMap.get(objectId);

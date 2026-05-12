@@ -178,6 +178,8 @@ export function ObjectPanel({ sceneId, onObjectDragStart }: ObjectPanelProps) {
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData("application/x-interior-vision-object", obj.id);
+                // text/plain fallback for WebViews that restrict custom MIME types
+                e.dataTransfer.setData("text/plain", obj.id);
                 e.dataTransfer.effectAllowed = "copy";
                 onObjectDragStart?.(obj.id);
               }}
