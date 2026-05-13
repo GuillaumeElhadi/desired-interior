@@ -16,13 +16,14 @@ from app.logging_config import configure_logging
 from app.objects.router import router as objects_router
 from app.scenes.router import router as scenes_router
 from app.schemas import ErrorResponse, HealthResponse, LogRequest
-from app.settings import Settings
+from app.settings import get_settings
+from app.settings_router import router as settings_router
 
 configure_logging()
 
 _log = structlog.get_logger()
 
-settings = Settings()
+settings = get_settings()
 init_fal_client(build_fal_client(settings))
 
 if settings.fal_key is None:
@@ -111,6 +112,7 @@ app.add_middleware(_RequestIdMiddleware)
 app.include_router(scenes_router)
 app.include_router(objects_router)
 app.include_router(compose_router)
+app.include_router(settings_router)
 
 
 @app.get("/health", dependencies=[Depends(verify_ipc_token)])

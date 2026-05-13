@@ -34,6 +34,10 @@ interface PlacementCanvasProps {
   pendingObjectId?: string | null;
   /** Called after the pending object has been placed so the parent can clear it. */
   onPendingObjectPlaced?: () => void;
+  /** Whether a fal.ai API key is configured — used to gate renders. */
+  falKeyConfigured?: boolean;
+  /** Called when the user clicks "Configure API key" in the render error. */
+  onOpenSettings?: () => void;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -85,6 +89,8 @@ export function PlacementCanvas({
   onRenderComplete,
   pendingObjectId,
   onPendingObjectPlaced,
+  falKeyConfigured = true,
+  onOpenSettings,
 }: PlacementCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -317,6 +323,11 @@ export function PlacementCanvas({
   }, [triggerPreview]);
 
   const handleRender = useCallback(async () => {
+    if (!falKeyConfigured) {
+      setRenderPhase("error");
+      setRenderError("No API key configured. Go to Settings to add your fal.ai key.");
+      return;
+    }
     const target = placements.find((p) => p.id === selectedId) ?? placements[placements.length - 1];
     if (!target) return;
     const entry = objectsMap.get(target.object_id);
@@ -377,6 +388,7 @@ export function PlacementCanvas({
     roomOffsetX,
     roomOffsetY,
     onRenderComplete,
+    falKeyConfigured,
   ]);
 
   const handleCancelRender = useCallback(() => {
@@ -713,13 +725,26 @@ export function PlacementCanvas({
             >
               Dismiss
             </button>
-            <button
-              type="button"
-              onClick={() => void handleRender()}
-              className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
-            >
-              Retry
-            </button>
+            {!falKeyConfigured && onOpenSettings ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setRenderPhase("idle");
+                  onOpenSettings();
+                }}
+                className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+              >
+                Open Settings
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleRender()}
+                className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+              >
+                Retry
+              </button>
+            )}
           </div>
         </div>
       )}

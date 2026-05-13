@@ -72,6 +72,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Update Settings
+     * @description Update runtime settings and rebuild any affected clients.
+     *
+     *     Currently supports updating FAL_KEY. The fal client is rebuilt immediately
+     *     so subsequent ML calls use the new key — no sidecar restart required.
+     */
+    post: operations["update_settings_settings_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -303,6 +326,16 @@ export interface components {
        */
       prompt_suffix: string;
     };
+    /** UpdateSettingsRequest */
+    UpdateSettingsRequest: {
+      /** Fal Key */
+      fal_key?: string | null;
+    };
+    /** UpdateSettingsResponse */
+    UpdateSettingsResponse: {
+      /** Ok */
+      ok: boolean;
+    };
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -452,6 +485,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PreviewComposeResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_settings_settings_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateSettingsRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UpdateSettingsResponse"];
         };
       };
       /** @description Validation Error */

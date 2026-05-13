@@ -103,6 +103,19 @@ export async function composePreview(
   return response.json() as Promise<PreviewComposeResponse>;
 }
 
+export async function updateSettings(body: { fal_key?: string }): Promise<void> {
+  const baseUrl = await getApiBaseUrl();
+  const response = await fetchWithAuth(`${baseUrl}/settings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const msg = await response.text().catch(() => response.statusText);
+    throw new Error(`updateSettings failed: ${response.status} ${msg}`);
+  }
+}
+
 export async function postLog(body: LogRequest): Promise<void> {
   const baseUrl = await getApiBaseUrl();
   const response = await fetchWithAuth(`${baseUrl}/logs`, {

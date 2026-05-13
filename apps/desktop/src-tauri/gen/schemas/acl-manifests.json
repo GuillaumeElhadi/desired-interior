@@ -2036,5 +2036,171 @@
     },
     "permission_sets": {},
     "global_scope_schema": null
+  },
+  "store": {
+    "default_permission": {
+      "identifier": "default",
+      "description": "This permission set configures what kind of\noperations are available from the store plugin.\n\n#### Granted Permissions\n\nAll operations are enabled by default.\n\n",
+      "permissions": [
+        "allow-load",
+        "allow-get-store",
+        "allow-set",
+        "allow-get",
+        "allow-has",
+        "allow-delete",
+        "allow-clear",
+        "allow-reset",
+        "allow-keys",
+        "allow-values",
+        "allow-entries",
+        "allow-length",
+        "allow-reload",
+        "allow-save"
+      ]
+    },
+    "permissions": {
+      "allow-clear": {
+        "identifier": "allow-clear",
+        "description": "Enables the clear command without any pre-configured scope.",
+        "commands": { "allow": ["clear"], "deny": [] }
+      },
+      "allow-delete": {
+        "identifier": "allow-delete",
+        "description": "Enables the delete command without any pre-configured scope.",
+        "commands": { "allow": ["delete"], "deny": [] }
+      },
+      "allow-entries": {
+        "identifier": "allow-entries",
+        "description": "Enables the entries command without any pre-configured scope.",
+        "commands": { "allow": ["entries"], "deny": [] }
+      },
+      "allow-get": {
+        "identifier": "allow-get",
+        "description": "Enables the get command without any pre-configured scope.",
+        "commands": { "allow": ["get"], "deny": [] }
+      },
+      "allow-get-store": {
+        "identifier": "allow-get-store",
+        "description": "Enables the get_store command without any pre-configured scope.",
+        "commands": { "allow": ["get_store"], "deny": [] }
+      },
+      "allow-has": {
+        "identifier": "allow-has",
+        "description": "Enables the has command without any pre-configured scope.",
+        "commands": { "allow": ["has"], "deny": [] }
+      },
+      "allow-keys": {
+        "identifier": "allow-keys",
+        "description": "Enables the keys command without any pre-configured scope.",
+        "commands": { "allow": ["keys"], "deny": [] }
+      },
+      "allow-length": {
+        "identifier": "allow-length",
+        "description": "Enables the length command without any pre-configured scope.",
+        "commands": { "allow": ["length"], "deny": [] }
+      },
+      "allow-load": {
+        "identifier": "allow-load",
+        "description": "Enables the load command without any pre-configured scope.",
+        "commands": { "allow": ["load"], "deny": [] }
+      },
+      "allow-reload": {
+        "identifier": "allow-reload",
+        "description": "Enables the reload command without any pre-configured scope.",
+        "commands": { "allow": ["reload"], "deny": [] }
+      },
+      "allow-reset": {
+        "identifier": "allow-reset",
+        "description": "Enables the reset command without any pre-configured scope.",
+        "commands": { "allow": ["reset"], "deny": [] }
+      },
+      "allow-save": {
+        "identifier": "allow-save",
+        "description": "Enables the save command without any pre-configured scope.",
+        "commands": { "allow": ["save"], "deny": [] }
+      },
+      "allow-set": {
+        "identifier": "allow-set",
+        "description": "Enables the set command without any pre-configured scope.",
+        "commands": { "allow": ["set"], "deny": [] }
+      },
+      "allow-values": {
+        "identifier": "allow-values",
+        "description": "Enables the values command without any pre-configured scope.",
+        "commands": { "allow": ["values"], "deny": [] }
+      },
+      "deny-clear": {
+        "identifier": "deny-clear",
+        "description": "Denies the clear command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["clear"] }
+      },
+      "deny-delete": {
+        "identifier": "deny-delete",
+        "description": "Denies the delete command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["delete"] }
+      },
+      "deny-entries": {
+        "identifier": "deny-entries",
+        "description": "Denies the entries command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["entries"] }
+      },
+      "deny-get": {
+        "identifier": "deny-get",
+        "description": "Denies the get command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["get"] }
+      },
+      "deny-get-store": {
+        "identifier": "deny-get-store",
+        "description": "Denies the get_store command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["get_store"] }
+      },
+      "deny-has": {
+        "identifier": "deny-has",
+        "description": "Denies the has command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["has"] }
+      },
+      "deny-keys": {
+        "identifier": "deny-keys",
+        "description": "Denies the keys command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["keys"] }
+      },
+      "deny-length": {
+        "identifier": "deny-length",
+        "description": "Denies the length command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["length"] }
+      },
+      "deny-load": {
+        "identifier": "deny-load",
+        "description": "Denies the load command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["load"] }
+      },
+      "deny-reload": {
+        "identifier": "deny-reload",
+        "description": "Denies the reload command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["reload"] }
+      },
+      "deny-reset": {
+        "identifier": "deny-reset",
+        "description": "Denies the reset command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["reset"] }
+      },
+      "deny-save": {
+        "identifier": "deny-save",
+        "description": "Denies the save command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["save"] }
+      },
+      "deny-set": {
+        "identifier": "deny-set",
+        "description": "Denies the set command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["set"] }
+      },
+      "deny-values": {
+        "identifier": "deny-values",
+        "description": "Denies the values command without any pre-configured scope.",
+        "commands": { "allow": [], "deny": ["values"] }
+      }
+    },
+    "permission_sets": {},
+    "global_scope_schema": null
   }
 }

@@ -36,6 +36,7 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 | `POST` | `/objects/extract`   | Object background removal          | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
 | `POST` | `/compose/preview`   | Fast preview composite (4 steps)   | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
 | `POST` | `/compose`           | Final quality composite (28 steps) | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
+| `POST` | `/settings`          | Hot-reload runtime settings        | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -104,6 +105,18 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
 **Latency budget (preview)**: ≤ 3 s p95 for 1024×1024 (Flux Dev at 4 steps). Cached previews returned in < 50 ms.
 
 The preview endpoint accepts the same `ComposeRequest` body as `/compose`. The preview cache (`~/Library/Caches/InteriorVision/preview/`) is kept separate from the final-render cache so quality tiers never intermix.
+
+### `UpdateSettingsRequest` / `UpdateSettingsResponse` schema
+
+```json
+// Request
+{ "fal_key": "fal_..." }
+
+// Response
+{ "ok": true }
+```
+
+Calling `POST /settings` with a `fal_key` rebuilds the fal.ai client immediately — no sidecar restart required. Pass an empty string `""` to clear the key (equivalent to unconfiguring it). Fields set to `null` are ignored (no-op). `fal_key` is validated to ≤ 200 characters.
 
 ### Error response schema
 

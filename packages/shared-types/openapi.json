@@ -233,6 +233,64 @@
         }
       }
     },
+    "/settings": {
+      "post": {
+        "tags": ["settings"],
+        "summary": "Update Settings",
+        "description": "Update runtime settings and rebuild any affected clients.\n\nCurrently supports updating FAL_KEY. The fal client is rebuilt immediately\nso subsequent ML calls use the new key \u2014 no sidecar restart required.",
+        "operationId": "update_settings_settings_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateSettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -693,6 +751,35 @@
         },
         "type": "object",
         "title": "StyleHints"
+      },
+      "UpdateSettingsRequest": {
+        "properties": {
+          "fal_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fal Key"
+          }
+        },
+        "type": "object",
+        "title": "UpdateSettingsRequest"
+      },
+      "UpdateSettingsResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": ["ok"],
+        "title": "UpdateSettingsResponse"
       },
       "ValidationError": {
         "properties": {
