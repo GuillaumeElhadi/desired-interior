@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import App from "../App";
 import * as api from "../lib/api";
+import * as settingsLib from "../lib/settings";
 
 vi.mock("../lib/api", () => ({
   checkHealth: vi.fn(),
@@ -97,5 +98,20 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByRole("region", { name: /room photo upload/i })).toBeInTheDocument();
     });
+  });
+
+  it("pushes stored fal key to sidecar after sidecar is ready", async () => {
+    vi.mocked(settingsLib.loadSettings).mockResolvedValue({ falKey: "fal_test" });
+    mockCheckHealth.mockResolvedValue({ status: "ok", version: "1.0.0" });
+    render(<App />);
+    await waitFor(() => {
+      expect(api.updateSettings).toHaveBeenCalledWith({ fal_key: "fal_test" });
+    });
+  });
+
+  it("shows gear settings button in header", () => {
+    mockCheckHealth.mockReturnValue(new Promise(() => {}));
+    render(<App />);
+    expect(screen.getByRole("button", { name: /open settings/i })).toBeInTheDocument();
   });
 });
