@@ -7,6 +7,12 @@ vi.mock("../lib/api", () => ({
   checkHealth: vi.fn(),
   preprocessScene: vi.fn(),
   extractObject: vi.fn(),
+  updateSettings: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../lib/settings", () => ({
+  loadSettings: vi.fn().mockResolvedValue({ falKey: "" }),
+  saveSettings: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../lib/db", () => ({

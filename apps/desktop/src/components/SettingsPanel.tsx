@@ -17,6 +17,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     loadSettings()
       .then(({ falKey: k }) => setFalKey(k))
       .catch(console.error);
+  }, []);
+
+  // Focus the input after first paint (separate from data load).
+  useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
@@ -44,20 +48,43 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   };
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap: redirect Tab/Shift+Tab back into the dialog.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button, input, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Settings"
+      aria-labelledby="settings-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
+      onKeyDown={handleKeyDown}
     >
-      <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+      <div ref={dialogRef} className="w-full max-w-md rounded-xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Settings</h2>
+          <h2 id="settings-title" className="text-base font-semibold text-gray-900">
+            Settings
+          </h2>
           <button
             type="button"
             aria-label="Close settings"

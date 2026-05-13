@@ -52,26 +52,26 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [falKeyConfigured, setFalKeyConfigured] = useState(false);
 
-  // Load settings from store and push FAL_KEY to the sidecar once it's ready.
-  useEffect(() => {
-    loadSettings()
-      .then(async ({ falKey }) => {
-        setFalKeyConfigured(!!falKey);
-        if (falKey) {
-          await updateSettings({ fal_key: falKey }).catch(console.error);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
   useEffect(() => {
     const controller = new AbortController();
-    waitForSidecar(controller.signal)
-      .then(({ version }) => setHealth({ status: "ok", version }))
-      .catch((err: unknown) => {
-        if (String(err).includes("aborted")) return;
-        setHealth({ status: "error", error: String(err) });
-      });
+    // Load the stored FAL_KEY first, then wait for the sidecar to be ready
+    // before pushing it — avoids a race where the key is sent before the
+    // sidecar has bound its port.
+    const init = async () => {
+      const { falKey } = await loadSettings();
+      setFalKeyConfigured(!!falKey);
+      const { version } = await waitForSidecar(controller.signal);
+      setHealth({ status: "ok", version });
+      if (falKey) {
+        await updateSettings({ fal_key: falKey }).catch(console.error);
+      }
+    };
+
+    init().catch((err: unknown) => {
+      if (String(err).includes("aborted")) return;
+      setHealth({ status: "error", error: String(err) });
+    });
+
     return () => controller.abort();
   }, []);
 
@@ -83,10 +83,12 @@ function App() {
           {!falKeyConfigured && (
             <button
               type="button"
+              aria-haspopup="dialog"
+              aria-label="Configure fal.ai API key — required for rendering"
               onClick={() => setShowSettings(true)}
               className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100"
             >
-              ⚠ Configure API key
+              <span aria-hidden="true">⚠</span> Configure API key
             </button>
           )}
           <span className="text-xs text-gray-400">
@@ -99,6 +101,7 @@ function App() {
           <button
             type="button"
             aria-label="Open settings"
+            aria-haspopup="dialog"
             onClick={() => setShowSettings(true)}
             className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
           >
