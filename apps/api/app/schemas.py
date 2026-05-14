@@ -135,6 +135,19 @@ class PreviewComposeResponse(BaseModel):
     image: ComposedImage
 
 
+# ---------------------------------------------------------------------------
+# Settings (task 4.2)
+# ---------------------------------------------------------------------------
+
+
+class UpdateSettingsRequest(BaseModel):
+    fal_key: Annotated[str | None, Field(max_length=200)] = None
+
+
+class UpdateSettingsResponse(BaseModel):
+    ok: bool
+
+
 # ErrorResponse is backend-internal: used by _RequestIdMiddleware to build the
 # JSON 500 body. It is not registered as a FastAPI response model and therefore
 # does not appear in openapi.json or packages/shared-types. The shape is

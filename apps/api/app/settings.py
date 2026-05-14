@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,3 +19,9 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the singleton Settings instance (created once at first call)."""
+    return Settings()

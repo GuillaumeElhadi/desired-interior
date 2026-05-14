@@ -112,6 +112,7 @@ pub fn run() {
                 .add_migrations("sqlite:interior-vision.db", db_migrations())
                 .build(),
         )
+        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .manage(ApiState {
             base_url: Mutex::new(None),

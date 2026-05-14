@@ -355,11 +355,11 @@
 
 ### 4.2 Settings panel
 
-- [ ] Branch: `feat/settings`
+- [x] Branch: `feat/settings`
 - Manage `FAL_KEY`, default render quality, cache size, telemetry opt-in
 - Persist with `tauri-plugin-store`
 - **Acceptance:**
-  - [ ] Invalid API key surfaces a clear error before first render
+  - [x] Invalid API key surfaces a clear error before first render
 
 ### 4.3 Robust error states + retry UX
 

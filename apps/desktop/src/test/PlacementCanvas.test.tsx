@@ -362,6 +362,18 @@ describe("PlacementCanvas — render flow", () => {
       expect(api.compose).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("shows API key error without calling compose when falKeyConfigured is false", async () => {
+    vi.mocked(db.loadPlacements).mockResolvedValue([MOCK_PLACEMENT]);
+    vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
+    render(<PlacementCanvas {...DEFAULT_PROPS} falKeyConfigured={false} />);
+    await screen.findByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.click(screen.getByRole("button", { name: /render/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+    expect(api.compose).not.toHaveBeenCalled();
+  });
 });
 
 describe("PlacementCanvas — preview", () => {

@@ -4,7 +4,9 @@ import { ObjectPanel } from "./components/ObjectPanel";
 import { PlacementCanvas } from "./components/PlacementCanvas";
 import { ResultView } from "./components/ResultView";
 import { RoomUpload, type SceneContext } from "./components/RoomUpload";
-import { checkHealth } from "./lib/api";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { checkHealth, updateSettings } from "./lib/api";
+import { loadSettings } from "./lib/settings";
 
 interface HealthState {
   status: "loading" | "ok" | "error";
@@ -47,15 +49,29 @@ function App() {
   const [sceneCtx, setSceneCtx] = useState<SceneContext | null>(null);
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [pendingObjectId, setPendingObjectId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [falKeyConfigured, setFalKeyConfigured] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    waitForSidecar(controller.signal)
-      .then(({ version }) => setHealth({ status: "ok", version }))
-      .catch((err: unknown) => {
-        if (String(err).includes("aborted")) return;
-        setHealth({ status: "error", error: String(err) });
-      });
+    // Load the stored FAL_KEY first, then wait for the sidecar to be ready
+    // before pushing it — avoids a race where the key is sent before the
+    // sidecar has bound its port.
+    const init = async () => {
+      const { falKey } = await loadSettings();
+      setFalKeyConfigured(!!falKey);
+      const { version } = await waitForSidecar(controller.signal);
+      setHealth({ status: "ok", version });
+      if (falKey) {
+        await updateSettings({ fal_key: falKey }).catch(console.error);
+      }
+    };
+
+    init().catch((err: unknown) => {
+      if (String(err).includes("aborted")) return;
+      setHealth({ status: "error", error: String(err) });
+    });
+
     return () => controller.abort();
   }, []);
 
@@ -63,14 +79,67 @@ function App() {
     <div className="flex min-h-screen flex-col bg-gray-50">
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
         <h1 className="text-base font-semibold text-gray-900">Interior Vision</h1>
-        <span className="text-xs text-gray-400">
-          {health.status === "loading" && "Connecting to API…"}
-          {health.status === "ok" && `API healthy · v${health.version}`}
-          {health.status === "error" && (
-            <span className="text-red-500">API error: {health.error}</span>
+        <div className="flex items-center gap-4">
+          {!falKeyConfigured && (
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-label="Configure fal.ai API key — required for rendering"
+              onClick={() => setShowSettings(true)}
+              className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100"
+            >
+              <span aria-hidden="true">⚠</span> Configure API key
+            </button>
           )}
-        </span>
+          <span className="text-xs text-gray-400">
+            {health.status === "loading" && "Connecting to API…"}
+            {health.status === "ok" && `API healthy · v${health.version}`}
+            {health.status === "error" && (
+              <span className="text-red-500">API error: {health.error}</span>
+            )}
+          </span>
+          <button
+            type="button"
+            aria-label="Open settings"
+            aria-haspopup="dialog"
+            onClick={() => setShowSettings(true)}
+            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </button>
+        </div>
       </header>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => {
+            setShowSettings(false);
+            // Refresh falKeyConfigured after save
+            loadSettings()
+              .then(({ falKey }) => setFalKeyConfigured(!!falKey))
+              .catch(console.error);
+          }}
+        />
+      )}
 
       <main className="flex flex-1 overflow-hidden">
         {sceneCtx && renderResult ? (
@@ -92,6 +161,8 @@ function App() {
               onRenderComplete={setRenderResult}
               pendingObjectId={pendingObjectId}
               onPendingObjectPlaced={() => setPendingObjectId(null)}
+              falKeyConfigured={falKeyConfigured}
+              onOpenSettings={() => setShowSettings(true)}
             />
             <ObjectPanel
               sceneId={sceneCtx.sceneId}
