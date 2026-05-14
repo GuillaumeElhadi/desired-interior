@@ -13,6 +13,10 @@ vi.mock("../lib/settings", () => ({
   saveSettings: vi.fn(),
 }));
 
+vi.mock("../lib/telemetry", () => ({
+  setEnabled: vi.fn(),
+}));
+
 const DEFAULT_PROPS = { onClose: vi.fn() };
 
 beforeEach(() => {
@@ -74,7 +78,9 @@ describe("SettingsPanel", () => {
     fireEvent.change(input, { target: { value: "fal_newkey" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => {
-      expect(settings.saveSettings).toHaveBeenCalledWith({ falKey: "fal_newkey" });
+      expect(settings.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ falKey: "fal_newkey" })
+      );
       expect(api.updateSettings).toHaveBeenCalledWith({ fal_key: "fal_newkey" });
     });
   });

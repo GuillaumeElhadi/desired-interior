@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
 import { type ComposeResponse, type PreprocessResponse, compose, composePreview } from "../lib/api";
 import { toUserMessage } from "../lib/errors";
+import * as telemetry from "../lib/telemetry";
 import {
   type ObjectRecord,
   type PlacementRecord,
@@ -413,6 +414,9 @@ export function PlacementCanvas({
     setRenderPhase("rendering");
     setRenderError(null);
 
+    const t0 = performance.now();
+    telemetry.renderStarted();
+
     try {
       const result: ComposeResponse = await compose(
         {
@@ -430,12 +434,15 @@ export function PlacementCanvas({
         result_url: result.image.url,
         created_at: Date.now(),
       });
+      telemetry.renderCompleted(performance.now() - t0);
       setRenderPhase("idle");
       onRenderComplete?.({ url: result.image.url, compositionId: result.composition_id });
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
         setRenderPhase("idle");
       } else {
+        const errorClass = err instanceof Error ? err.constructor.name : "UnknownError";
+        telemetry.renderFailed(performance.now() - t0, errorClass);
         const msg = toUserMessage(err);
         setRenderPhase("error");
         setRenderError(msg);

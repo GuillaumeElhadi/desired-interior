@@ -429,11 +429,11 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 4.6 Telemetry (opt-in, anonymous)
 
-- [ ] Branch: `feat/telemetry`
+- [x] Branch: `feat/telemetry`
 - Use Plausible or PostHog with opt-in consent
 - Events: `render_started`, `render_completed`, `render_failed`, `harmonize_started`, `harmonize_completed`, `harmonize_failed` with duration and error class only — never image content
 - **Acceptance:**
-  - [ ] Opt-out fully disables network calls (verified via packet capture or unit test on the wrapper)
+  - [x] Opt-out fully disables network calls (verified via packet capture or unit test on the wrapper)
 
 ### 4.7 Pluggable background-removal driver
 

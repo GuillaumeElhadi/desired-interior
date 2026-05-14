@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ConsentBanner } from "./components/ConsentBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { ObjectPanel } from "./components/ObjectPanel";
@@ -9,7 +10,8 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { checkHealth, updateSettings } from "./lib/api";
 import { toUserMessage } from "./lib/errors";
-import { loadSettings } from "./lib/settings";
+import { loadSettings, saveSettings } from "./lib/settings";
+import * as telemetry from "./lib/telemetry";
 
 interface HealthState {
   status: "loading" | "ok" | "error";
@@ -56,6 +58,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [falKeyConfigured, setFalKeyConfigured] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [analyticsDecided, setAnalyticsDecided] = useState(true);
   const isOnline = useOnlineStatus();
 
   useEffect(() => {
@@ -64,8 +67,12 @@ function App() {
     // before pushing it — avoids a race where the key is sent before the
     // sidecar has bound its port.
     const init = async () => {
-      const { falKey } = await loadSettings();
+      const { falKey, analyticsEnabled, anonymousId } = await loadSettings();
       setFalKeyConfigured(!!falKey);
+      setAnalyticsDecided(analyticsEnabled !== undefined);
+      if (analyticsEnabled !== undefined) {
+        telemetry.init(analyticsEnabled, anonymousId ?? "");
+      }
       const { version } = await waitForSidecar(controller.signal);
       setHealth({ status: "ok", version });
       if (falKey) {
@@ -89,6 +96,23 @@ function App() {
   const handleRetryHealth = useCallback(() => {
     setHealth({ status: "loading" });
     setRetryCount((c) => c + 1);
+  }, []);
+
+  const handleConsentAllow = useCallback(() => {
+    const anonymousId = crypto.randomUUID();
+    telemetry.init(true, anonymousId);
+    setAnalyticsDecided(true);
+    loadSettings()
+      .then((s) => saveSettings({ ...s, analyticsEnabled: true, anonymousId }))
+      .catch(console.error);
+  }, []);
+
+  const handleConsentDecline = useCallback(() => {
+    telemetry.init(false, "");
+    setAnalyticsDecided(true);
+    loadSettings()
+      .then((s) => saveSettings({ ...s, analyticsEnabled: false }))
+      .catch(console.error);
   }, []);
 
   return (
@@ -160,6 +184,10 @@ function App() {
       </header>
 
       {!isOnline && <OfflineBanner />}
+
+      {!analyticsDecided && (
+        <ConsentBanner onAllow={handleConsentAllow} onDecline={handleConsentDecline} />
+      )}
 
       {showSettings && (
         <SettingsPanel
