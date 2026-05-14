@@ -291,6 +291,11 @@ export interface components {
        * @default 0.5
        */
       depth_hint: number;
+      /**
+       * Rotation
+       * @default 0
+       */
+      rotation: number;
     };
     /** PreprocessResponse */
     PreprocessResponse: {

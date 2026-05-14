@@ -28,15 +28,15 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 
 ## HTTP endpoints
 
-| Method | Path                 | Description                        | Request body                          | Response body / status          |
-| ------ | -------------------- | ---------------------------------- | ------------------------------------- | ------------------------------- |
-| `GET`  | `/health`            | Liveness probe                     | —                                     | `HealthResponse` (JSON)         |
-| `POST` | `/logs`              | Receive frontend logs              | `LogRequest` (JSON)                   | `204 No Content`                |
-| `POST` | `/scenes/preprocess` | Scene depth + segmentation         | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
-| `POST` | `/objects/extract`   | Object background removal          | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
-| `POST` | `/compose/preview`   | Fast preview composite (4 steps)   | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
-| `POST` | `/compose`           | Final quality composite (28 steps) | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
-| `POST` | `/settings`          | Hot-reload runtime settings        | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
+| Method | Path                 | Description                                                                         | Request body                          | Response body / status          |
+| ------ | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------- |
+| `GET`  | `/health`            | Liveness probe                                                                      | —                                     | `HealthResponse` (JSON)         |
+| `POST` | `/logs`              | Receive frontend logs                                                               | `LogRequest` (JSON)                   | `204 No Content`                |
+| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                          | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
+| `POST` | `/objects/extract`   | Object background removal                                                           | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
+| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)   | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
+| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
+| `POST` | `/settings`          | Hot-reload runtime settings                                                         | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -64,7 +64,8 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
   "object_id": "<SHA-256 returned by /objects/extract>",
   "placement": {
     "bbox": { "x": 50, "y": 80, "width": 200, "height": 200 },
-    "depth_hint": 0.5
+    "depth_hint": 0.5,
+    "rotation": 0.0
   },
   "style_hints": {
     "prompt_suffix": "Scandinavian style, warm lighting."
@@ -72,7 +73,7 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
 }
 ```
 
-`bbox` coordinates are in pixels relative to the original room image. `depth_hint` is a normalised depth value (0 = foreground, 1 = background). `style_hints` is optional and defaults to empty.
+`bbox` coordinates are in pixels relative to the original room image. `depth_hint` is a normalised depth value (0 = foreground, 1 = background). `rotation` is in clockwise degrees, matching Konva's convention; the object is rotated around its centre. `style_hints` is optional and currently unused by the local compositing path (kept in the schema for forward compatibility — see ADR-0007).
 
 **Prerequisite**: `/scenes/preprocess` must have been called with the room image before `/compose` — it writes the original image bytes to disk so the composition step can retrieve them. A `409 Conflict` is returned if the original is missing from cache.
 
@@ -82,13 +83,15 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
 {
   "composition_id": "<SHA-256 of the composition inputs — used as cache key>",
   "image": {
-    "url": "<fal.ai CDN URL of the composed JPEG>",
+    "url": "data:image/jpeg;base64,<base64-encoded JPEG bytes>",
     "content_type": "image/jpeg"
   }
 }
 ```
 
-**Latency budget (final)**: ≤ 15 s p95 for 1024×1024 (Flux Dev, 28 steps). Cached compositions returned in < 50 ms.
+The `url` is a `data:` URL containing the composited JPEG inline — there is no longer an external CDN fetch. The frontend feeds it directly to `<img src>` or `Image.src`. See [ADR-0007](adr/0007-pil-compositing-over-flux-fill.md) for the rationale (faithful placement of the user's exact object).
+
+**Latency budget (final)**: < 500 ms p95 for 1024×1024 (local PIL composite + JPEG encode + one CDN download for the masked PNG). Cached compositions returned in < 50 ms. No fal.ai inference call is made by `/compose`.
 
 ### `PreviewComposeResponse` schema
 
@@ -96,15 +99,13 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
 {
   "preview_id": "<SHA-256 of the composition inputs — used as preview cache key>",
   "image": {
-    "url": "<fal.ai CDN URL of the preview JPEG>",
+    "url": "data:image/jpeg;base64,<base64-encoded JPEG bytes>",
     "content_type": "image/jpeg"
   }
 }
 ```
 
-**Latency budget (preview)**: ≤ 3 s p95 for 1024×1024 (Flux Dev at 4 steps). Cached previews returned in < 50 ms.
-
-The preview endpoint accepts the same `ComposeRequest` body as `/compose`. The preview cache (`~/Library/Caches/InteriorVision/preview/`) is kept separate from the final-render cache so quality tiers never intermix.
+**Latency budget (preview)**: identical to `/compose` — the preview now uses the same local PIL path. The endpoint is kept distinct from `/compose` only so the two caches stay isolated (`~/Library/Caches/InteriorVision/preview/` vs `~/Library/Caches/InteriorVision/compose/`); behaviour and quality are identical.
 
 ### `UpdateSettingsRequest` / `UpdateSettingsResponse` schema
 

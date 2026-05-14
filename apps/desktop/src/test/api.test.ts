@@ -140,6 +140,7 @@ describe("compose", () => {
     placement: {
       bbox: { x: 10, y: 20, width: 100, height: 80 },
       depth_hint: 0.5,
+      rotation: 0,
     },
     style_hints: { prompt_suffix: "" },
   };
@@ -249,6 +250,7 @@ describe("composePreview", () => {
     placement: {
       bbox: { x: 10, y: 20, width: 100, height: 80 },
       depth_hint: 0.5,
+      rotation: 0,
     },
     style_hints: { prompt_suffix: "" },
   };

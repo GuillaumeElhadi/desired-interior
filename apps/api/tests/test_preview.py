@@ -1,7 +1,7 @@
-"""Tests for the /compose/preview endpoint: cache, preview function, and router."""
+"""Tests for the /compose/preview endpoint."""
 
+import base64
 import io
-import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,23 +9,13 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
-from app.cloud.fal_client import AsyncFalClient, FalError, FalRateLimitError, FalTimeoutError
+from app.cloud.fal_client import AsyncFalClient, FalMalformedResponseError
 from app.compose import preview_cache as preview_cache_module
 from app.compose.composition import make_cache_key
 from app.dependencies import get_fal_client
 from app.main import app
 from app.objects import cache as obj_cache_module
 from app.scenes import cache as scene_cache_module
-
-_PREVIEW_RESPONSE = {
-    "images": [
-        {
-            "url": "https://cdn.fal.ai/preview.jpg",
-            "content_type": "image/jpeg",
-        }
-    ],
-    "prompt": "Photorealistic furniture piece…",
-}
 
 _SCENE_CACHE_ENTRY = {
     "scene_id": "a" * 64,
@@ -64,7 +54,7 @@ _VALID_BODY = {
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -73,6 +63,21 @@ def _make_jpeg(width: int = 256, height: int = 256) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
     return buf.getvalue()
+
+
+def _make_png_rgba(width: int = 32, height: int = 32) -> bytes:
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    for x in range(8, width - 8):
+        for y in range(8, height - 8):
+            img.putpixel((x, y), (100, 160, 200, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -111,18 +116,19 @@ def tmp_obj_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def mock_fal() -> AsyncMock:
-    mock_run = AsyncMock(return_value=_PREVIEW_RESPONSE)
+    png_bytes = _make_png_rgba()
+    mock_fetch = AsyncMock(return_value=png_bytes)
     mock_client = MagicMock(spec=AsyncFalClient)
-    mock_client.run = mock_run
+    mock_client.fetch_bytes = mock_fetch
     app.dependency_overrides[get_fal_client] = lambda: mock_client
-    yield mock_run
+    yield mock_fetch
     app.dependency_overrides.clear()
 
 
 def _fal_error_override(side_effect: Exception) -> None:
-    mock_run = AsyncMock(side_effect=side_effect)
+    mock_fetch = AsyncMock(side_effect=side_effect)
     mock_client = MagicMock(spec=AsyncFalClient)
-    mock_client.run = mock_run
+    mock_client.fetch_bytes = mock_fetch
     app.dependency_overrides[get_fal_client] = lambda: mock_client
 
 
@@ -144,7 +150,7 @@ def test_preview_cache_miss_returns_none(tmp_preview_cache: Path) -> None:
 def test_preview_cache_save_and_hit(tmp_preview_cache: Path) -> None:
     data = {
         "preview_id": "xyz",
-        "image": {"url": "https://cdn.fal.ai/preview.jpg", "content_type": "image/jpeg"},
+        "image": {"url": "data:image/jpeg;base64,abc", "content_type": "image/jpeg"},
     }
     preview_cache_module.save_cached("xyz", data)
     assert preview_cache_module.load_cached("xyz") == data
@@ -156,7 +162,7 @@ def test_preview_cache_save_and_hit(tmp_preview_cache: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_preview_cache_miss_calls_fal_with_4_steps(
+async def test_preview_returns_data_url(
     tmp_preview_cache: Path,
     tmp_scene_cache: Path,
     tmp_obj_cache: Path,
@@ -169,18 +175,33 @@ async def test_preview_cache_miss_calls_fal_with_4_steps(
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["image"]["url"] == "https://cdn.fal.ai/preview.jpg"
+    assert data["image"]["url"].startswith("data:image/jpeg;base64,")
     assert "preview_id" in data
     assert mock_fal.await_count == 1
 
-    # Verify the fal call used the right endpoint and 4 inference steps
-    call_args = mock_fal.call_args
-    assert call_args[0][0] == "fal-ai/flux-lora/inpainting"
-    assert call_args[0][1]["num_inference_steps"] == 4
+
+@pytest.mark.asyncio
+async def test_preview_result_is_valid_jpeg(
+    tmp_preview_cache: Path,
+    tmp_scene_cache: Path,
+    tmp_obj_cache: Path,
+    mock_fal: AsyncMock,
+) -> None:
+    _seed_caches(_make_jpeg(256, 256))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        resp = await c.post("/compose/preview", json=_VALID_BODY)
+
+    assert resp.status_code == 200
+    url = resp.json()["image"]["url"]
+    b64 = url.split(",", 1)[1]
+    img = Image.open(io.BytesIO(base64.b64decode(b64)))
+    assert img.mode == "RGB"
+    assert img.size == (256, 256)
 
 
 @pytest.mark.asyncio
-async def test_preview_cache_hit_skips_fal(
+async def test_preview_cache_hit_skips_fetch(
     tmp_preview_cache: Path,
     tmp_scene_cache: Path,
     tmp_obj_cache: Path,
@@ -197,7 +218,7 @@ async def test_preview_cache_hit_skips_fal(
         cache_key,
         {
             "preview_id": cache_key,
-            "image": {"url": "https://cdn.fal.ai/cached-preview.jpg", "content_type": "image/jpeg"},
+            "image": {"url": "data:image/jpeg;base64,cached", "content_type": "image/jpeg"},
         },
     )
 
@@ -205,7 +226,7 @@ async def test_preview_cache_hit_skips_fal(
         resp = await c.post("/compose/preview", json=_VALID_BODY)
 
     assert resp.status_code == 200
-    assert resp.json()["image"]["url"] == "https://cdn.fal.ai/cached-preview.jpg"
+    assert resp.json()["image"]["url"] == "data:image/jpeg;base64,cached"
     mock_fal.assert_not_awaited()
 
 
@@ -255,44 +276,12 @@ async def test_preview_missing_original_returns_409(
 
 
 @pytest.mark.asyncio
-async def test_preview_fal_timeout_returns_504(
+async def test_preview_bad_object_url_returns_502(
     tmp_preview_cache: Path,
     tmp_scene_cache: Path,
     tmp_obj_cache: Path,
 ) -> None:
-    _fal_error_override(FalTimeoutError("timed out"))
-    _seed_caches(_make_jpeg())
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post("/compose/preview", json=_VALID_BODY)
-        assert resp.status_code == 504
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_preview_fal_rate_limit_returns_429(
-    tmp_preview_cache: Path,
-    tmp_scene_cache: Path,
-    tmp_obj_cache: Path,
-) -> None:
-    _fal_error_override(FalRateLimitError("rate limited"))
-    _seed_caches(_make_jpeg())
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post("/compose/preview", json=_VALID_BODY)
-        assert resp.status_code == 429
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_preview_fal_generic_error_returns_502(
-    tmp_preview_cache: Path,
-    tmp_scene_cache: Path,
-    tmp_obj_cache: Path,
-) -> None:
-    _fal_error_override(FalError("unexpected"))
+    _fal_error_override(FalMalformedResponseError("untrusted URL blocked"))
     _seed_caches(_make_jpeg())
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -319,7 +308,7 @@ async def test_preview_response_shape(
     assert "preview_id" in data
     assert len(data["preview_id"]) == 64
     assert "image" in data
-    assert data["image"]["url"] != ""
+    assert data["image"]["url"].startswith("data:image/jpeg;base64,")
     assert data["image"]["content_type"] == "image/jpeg"
 
 
@@ -342,56 +331,5 @@ async def test_preview_cache_isolated_from_compose_cache(
     assert resp.status_code == 200
     preview_id = resp.json()["preview_id"]
 
-    # Preview cache should have it
     assert preview_cache_module.load_cached(preview_id) is not None
-    # Compose cache must NOT have it
     assert compose_cache_module.load_cached(preview_id) is None
-
-
-# ---------------------------------------------------------------------------
-# Regression guard: final /compose still uses 28 steps
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_final_compose_uses_28_steps(
-    tmp_compose_cache: Path,
-    tmp_scene_cache: Path,
-    tmp_obj_cache: Path,
-    mock_fal: AsyncMock,
-) -> None:
-    _seed_caches(_make_jpeg())
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        resp = await c.post("/compose", json=_VALID_BODY)
-
-    assert resp.status_code == 200
-    assert mock_fal.await_count == 1
-    call_args = mock_fal.call_args
-    assert call_args[0][0] == "fal-ai/flux-lora/inpainting"
-    assert call_args[0][1]["num_inference_steps"] == 28
-
-
-# ---------------------------------------------------------------------------
-# Live test
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.live
-@pytest.mark.asyncio
-async def test_live_preview_returns_image_url(
-    tmp_preview_cache: Path,
-    tmp_scene_cache: Path,
-    tmp_obj_cache: Path,
-) -> None:
-    key = os.environ.get("FAL_KEY")
-    if not key:
-        pytest.skip("FAL_KEY not set")
-
-    _seed_caches(_make_jpeg(512, 512))
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        resp = await c.post("/compose/preview", json=_VALID_BODY)
-
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["image"]["url"].startswith("https://")

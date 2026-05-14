@@ -307,7 +307,7 @@ export function PlacementCanvas({
         {
           scene_id: sceneId,
           object_id: target.object_id,
-          placement: { bbox, depth_hint: target.depth_hint },
+          placement: { bbox, depth_hint: target.depth_hint, rotation: target.rotation },
           style_hints: { prompt_suffix: "" },
         },
         ac.signal
@@ -380,7 +380,7 @@ export function PlacementCanvas({
         {
           scene_id: sceneId,
           object_id: target.object_id,
-          placement: { bbox, depth_hint: target.depth_hint },
+          placement: { bbox, depth_hint: target.depth_hint, rotation: target.rotation },
           style_hints: { prompt_suffix: "" },
         },
         ac.signal

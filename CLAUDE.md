@@ -91,11 +91,16 @@ Examples:
 - Backend: pytest + pytest-asyncio + httpx for FastAPI client.
 - ML calls in tests are mocked unless explicitly marked `@pytest.mark.live` (requires `FAL_KEY`).
 
+## Node version — IMPORTANT
+
+This repo pins Node via `.nvmrc` (currently v22). **Always run `source ~/.nvm/nvm.sh && nvm use` at the start of any session that will run `pnpm lint`, `pnpm test`, or `pnpm typecheck`.** The default system Node may be older (e.g., 18) and will fail vitest/eslint with `util.styleText is not a function`. If you see that error, it's the Node version, not the code.
+
 ## Quality gates (run before every commit)
 
 `pre-commit` enforces these locally. Don't bypass with `--no-verify`.
 
 ```
+source ~/.nvm/nvm.sh && nvm use   # use Node version from .nvmrc
 pnpm lint
 pnpm typecheck
 pnpm test

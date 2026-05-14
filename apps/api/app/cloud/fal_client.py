@@ -87,28 +87,35 @@ class AsyncFalClient:
         # unreachable — reraise=True means the last exception is re-raised directly
         raise AssertionError("unreachable")  # pragma: no cover
 
-    _ALLOWED_HOSTS = (".fal.ai", ".fal.run")
+    _ALLOWED_HOSTS = (".fal.ai", ".fal.run", ".fal.media")
     _MAX_FETCH_BYTES = 50 * 1024 * 1024  # 50 MB
 
     async def fetch_bytes(self, url: str) -> bytes:
         """Download raw bytes from a fal.ai CDN URL.
 
-        Validates scheme (https only) and host (*.fal.ai / *.fal.run) before
-        connecting to prevent SSRF.  Caps response body at 50 MB.
+        Validates scheme (https only) and host suffix (`.fal.ai` / `.fal.run` /
+        `.fal.media`) before connecting to prevent SSRF. Streams the response
+        body and aborts as soon as the 50 MB cap is crossed, so a hostile or
+        misbehaving server cannot force us to buffer multi-GB payloads.
         """
         parsed = httpx.URL(url)
         if parsed.scheme != "https" or not any(
             parsed.host.endswith(h) for h in self._ALLOWED_HOSTS
         ):
             raise FalMalformedResponseError(f"fetch_bytes: untrusted URL blocked: {url!r}")
+        chunks: list[bytes] = []
+        total = 0
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as http:
-            resp = await http.get(url)
-            resp.raise_for_status()
-            if len(resp.content) > self._MAX_FETCH_BYTES:
-                raise FalMalformedResponseError(
-                    f"fetch_bytes: response too large ({len(resp.content)} bytes)"
-                )
-            return resp.content
+            async with http.stream("GET", url) as resp:
+                resp.raise_for_status()
+                async for chunk in resp.aiter_bytes():
+                    total += len(chunk)
+                    if total > self._MAX_FETCH_BYTES:
+                        raise FalMalformedResponseError(
+                            f"fetch_bytes: response exceeded {self._MAX_FETCH_BYTES} bytes"
+                        )
+                    chunks.append(chunk)
+        return b"".join(chunks)
 
     async def _call(self, endpoint: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if self._sdk_client is None:

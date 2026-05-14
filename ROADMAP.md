@@ -369,7 +369,17 @@
 - **Acceptance:**
   - [x] Manual test matrix: kill sidecar, drop wifi, expire API key — each shows the right state
 
-### 4.4 Telemetry (opt-in, anonymous)
+### 4.4 Faithful PIL compositing (replaces Flux Fill for placement)
+
+- [x] Branch: `feat/faithful-compositing`
+- The original `/compose` path passed only a binary mask + prompt to Flux Fill — the object PNG was never sent. The model hallucinated a furniture-shaped region inspired by the prompt, not the user's actual object. Fix: replace the generative inpainting call with PIL alpha-compositing using the BiRefNet-extracted PNG. The result is the exact object placed at the user's chosen position, scale, and rotation. Adds `rotation` to `PlacementSpec` (Konva already tracks it), `.fal.media` to the SSRF allowlist for `fetch_bytes`, and returns a base64 JPEG data URL instead of a fal.ai CDN URL. Both `/compose` and `/compose/preview` share the same logic.
+- **Acceptance:**
+  - [x] `/compose` returns a JPEG data URL containing the user's exact object at the requested bbox + rotation
+  - [x] No fal.ai inference call is made by `/compose` (only `fetch_bytes` for the extracted PNG)
+  - [x] Preview is near-instant (no Flux Schnell round-trip)
+  - [x] All offline composition/preview tests pass + e2e test updated
+
+### 4.5 Telemetry (opt-in, anonymous)
 
 - [ ] Branch: `feat/telemetry`
 - Use Plausible or PostHog with opt-in consent

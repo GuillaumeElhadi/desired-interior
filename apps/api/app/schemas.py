@@ -102,6 +102,7 @@ class BoundingBox(BaseModel):
 class PlacementSpec(BaseModel):
     bbox: BoundingBox
     depth_hint: float = 0.5
+    rotation: float = 0.0
 
 
 class StyleHints(BaseModel):
