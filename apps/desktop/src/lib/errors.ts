@@ -1,5 +1,3 @@
-import { ApiError } from "./api";
-
 export interface UserMessage {
   title: string;
   detail: string;
@@ -7,8 +5,16 @@ export interface UserMessage {
   cta: "retry" | "settings" | "reload" | "wait" | "none";
 }
 
+interface ApiErrorShape {
+  errorCode: string;
+}
+
+function isApiError(err: unknown): err is ApiErrorShape {
+  return typeof err === "object" && err !== null && "errorCode" in err;
+}
+
 export function toUserMessage(err: unknown): UserMessage {
-  if (!(err instanceof ApiError)) {
+  if (!isApiError(err)) {
     return {
       title: "Unexpected error",
       detail: "Something went wrong. Please try again.",

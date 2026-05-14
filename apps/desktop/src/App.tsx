@@ -7,7 +7,7 @@ import { ResultView } from "./components/ResultView";
 import { RoomUpload, type SceneContext } from "./components/RoomUpload";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
-import { ApiError, checkHealth, updateSettings } from "./lib/api";
+import { checkHealth, updateSettings } from "./lib/api";
 import { toUserMessage } from "./lib/errors";
 import { loadSettings } from "./lib/settings";
 
@@ -76,7 +76,10 @@ function App() {
     init().catch((err: unknown) => {
       if (String(err).includes("aborted")) return;
       const msg = toUserMessage(err);
-      const code = err instanceof ApiError ? err.errorCode : "unknown";
+      const code =
+        typeof err === "object" && err !== null && "errorCode" in err
+          ? String((err as { errorCode: unknown }).errorCode)
+          : "unknown";
       setHealth({ status: "error", error: msg.detail, errorCode: code });
     });
 

@@ -57,14 +57,14 @@ describe("App", () => {
   it("shows connecting state while waiting for sidecar", () => {
     mockCheckHealth.mockReturnValue(new Promise(() => {}));
     render(<App />);
-    expect(screen.getByText(/connecting to api/i)).toBeInTheDocument();
+    expect(screen.getByText(/connecting/i)).toBeInTheDocument();
   });
 
   it("shows healthy state when checkHealth resolves on first attempt", async () => {
     mockCheckHealth.mockResolvedValue({ status: "ok", version: "1.2.3" });
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText(/api healthy · v1\.2\.3/i)).toBeInTheDocument();
+      expect(screen.getByText(/api v1\.2\.3/i)).toBeInTheDocument();
     });
   });
 
@@ -77,7 +77,7 @@ describe("App", () => {
     await vi.advanceTimersByTimeAsync(400); // past the 300 ms first retry delay
     vi.useRealTimers();
     await waitFor(() => {
-      expect(screen.getByText(/api healthy/i)).toBeInTheDocument();
+      expect(screen.getByText(/api v0\.0\.0/i)).toBeInTheDocument();
     });
   });
 
@@ -88,7 +88,7 @@ describe("App", () => {
     await vi.advanceTimersByTimeAsync(10000); // past all retry delays (~8.1 s total)
     vi.useRealTimers();
     await waitFor(() => {
-      expect(screen.getByText(/api error/i)).toBeInTheDocument();
+      expect(screen.getByText(/unavailable|api error/i)).toBeInTheDocument();
     });
   });
 

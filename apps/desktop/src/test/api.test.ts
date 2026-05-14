@@ -23,6 +23,16 @@ function setupInvokeMocks() {
   });
 }
 
+/** Build a mock non-ok Response that fromResponse can parse via .text(). */
+function errorResponse(status: number, statusText: string, body: object) {
+  return {
+    ok: false,
+    status,
+    statusText,
+    text: () => Promise.resolve(JSON.stringify(body)),
+  };
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe("getApiBaseUrl", () => {
@@ -52,13 +62,13 @@ describe("checkHealth", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        statusText: "Service Unavailable",
-        json: () =>
-          Promise.resolve({ error_code: "service_unavailable", message: "down", request_id: "r1" }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(503, "Service Unavailable", {
+          error_code: "service_unavailable",
+          message: "down",
+          request_id: "r1",
+        })
+      )
     );
     await expect(checkHealth()).rejects.toBeInstanceOf(ApiError);
     await expect(checkHealth()).rejects.toMatchObject({
@@ -110,17 +120,13 @@ describe("postLog", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
-        json: () =>
-          Promise.resolve({
-            error_code: "internal_server_error",
-            message: "boom",
-            request_id: "r2",
-          }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(500, "Internal Server Error", {
+          error_code: "internal_server_error",
+          message: "boom",
+          request_id: "r2",
+        })
+      )
     );
     await expect(postLog({ entries: [] })).rejects.toBeInstanceOf(ApiError);
     await expect(postLog({ entries: [] })).rejects.toMatchObject({ httpStatus: 500 });
@@ -188,13 +194,13 @@ describe("compose", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 504,
-        statusText: "Gateway Timeout",
-        json: () =>
-          Promise.resolve({ error_code: "fal_timeout", message: "timed out", request_id: "r3" }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(504, "Gateway Timeout", {
+          error_code: "fal_timeout",
+          message: "timed out",
+          request_id: "r3",
+        })
+      )
     );
     await expect(compose(COMPOSE_REQUEST)).rejects.toBeInstanceOf(ApiError);
     await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({
@@ -207,13 +213,13 @@ describe("compose", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        statusText: "Service Unavailable",
-        json: () =>
-          Promise.resolve({ error_code: "fal_key_missing", message: "no key", request_id: "r4" }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(503, "Service Unavailable", {
+          error_code: "fal_key_missing",
+          message: "no key",
+          request_id: "r4",
+        })
+      )
     );
     await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({ errorCode: "fal_key_missing" });
   });
@@ -222,19 +228,17 @@ describe("compose", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 429,
-        statusText: "Too Many Requests",
-        json: () =>
-          Promise.resolve({
-            error_code: "fal_rate_limited",
-            message: "slow down",
-            request_id: "r5",
-          }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(429, "Too Many Requests", {
+          error_code: "fal_rate_limited",
+          message: "slow down",
+          request_id: "r5",
+        })
+      )
     );
-    await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({ errorCode: "fal_rate_limited" });
+    await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_rate_limited",
+    });
   });
 });
 
@@ -299,13 +303,13 @@ describe("composePreview", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 504,
-        statusText: "Gateway Timeout",
-        json: () =>
-          Promise.resolve({ error_code: "fal_timeout", message: "timed out", request_id: "r6" }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(504, "Gateway Timeout", {
+          error_code: "fal_timeout",
+          message: "timed out",
+          request_id: "r6",
+        })
+      )
     );
     await expect(composePreview(COMPOSE_REQUEST)).rejects.toBeInstanceOf(ApiError);
     await expect(composePreview(COMPOSE_REQUEST)).rejects.toMatchObject({ httpStatus: 504 });
@@ -353,13 +357,13 @@ describe("preprocessScene", () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 502,
-        statusText: "Bad Gateway",
-        json: () =>
-          Promise.resolve({ error_code: "fal_error", message: "fal.ai error", request_id: "r7" }),
-      })
+      vi.fn().mockResolvedValue(
+        errorResponse(502, "Bad Gateway", {
+          error_code: "fal_error",
+          message: "fal.ai error",
+          request_id: "r7",
+        })
+      )
     );
     const file = new File([], "room.jpg", { type: "image/jpeg" });
     await expect(preprocessScene(file)).rejects.toBeInstanceOf(ApiError);

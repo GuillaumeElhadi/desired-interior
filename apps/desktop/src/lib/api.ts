@@ -32,17 +32,20 @@ export class ApiError extends Error {
     let message = response.statusText || `HTTP ${response.status}`;
     let requestId: string | undefined;
     try {
-      const body = (await response.json()) as Record<string, unknown>;
-      if (typeof body.error_code === "string") errorCode = body.error_code;
-      else if (typeof body.error === "string") errorCode = body.error;
-      if (typeof body.message === "string") message = body.message;
-      if (typeof body.request_id === "string") requestId = body.request_id;
-    } catch {
+      // Read text first — body stream can only be consumed once, so we parse
+      // JSON ourselves rather than calling response.json() then response.text().
+      const text = await response.text();
       try {
-        message = await response.text();
+        const body = JSON.parse(text) as Record<string, unknown>;
+        if (typeof body.error_code === "string") errorCode = body.error_code;
+        else if (typeof body.error === "string") errorCode = body.error;
+        if (typeof body.message === "string") message = body.message;
+        if (typeof body.request_id === "string") requestId = body.request_id;
       } catch {
-        /* ignore */
+        if (text) message = text;
       }
+    } catch {
+      /* ignore — statusText fallback already set above */
     }
     return new ApiError(errorCode, response.status, message, requestId);
   }
