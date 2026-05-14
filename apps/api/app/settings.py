@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     fal_key: str | None = None
     fal_timeout_s: float = 60.0
     fal_max_retries: int = 3
+    bg_removal_backend: Literal["birefnet", "bria"] = "birefnet"
 
     model_config = SettingsConfigDict(
         env_file=".env.local",

@@ -1,6 +1,9 @@
 """SHA-256 disk cache for object extraction results.
 
-Cache root: ~/Library/Caches/InteriorVision/objects/<sha256>/result.json
+Cache root: ~/Library/Caches/InteriorVision/objects/<backend>/<sha256>/result.json
+
+The backend segment prevents cross-backend cache hits when BG_REMOVAL_BACKEND
+is toggled between "birefnet" and "bria".
 """
 
 from pathlib import Path
@@ -18,9 +21,9 @@ def get_cache_root() -> Path:
     return Path.home() / "Library" / "Caches" / "InteriorVision" / "objects"
 
 
-def load_cached(sha256: str) -> dict[str, Any] | None:
-    return _load(sha256, get_cache_root())
+def load_cached(sha256: str, backend: str = "birefnet") -> dict[str, Any] | None:
+    return _load(sha256, get_cache_root() / backend)
 
 
-def save_cached(sha256: str, result: dict[str, Any]) -> None:
-    _save(sha256, result, get_cache_root())
+def save_cached(sha256: str, result: dict[str, Any], backend: str = "birefnet") -> None:
+    _save(sha256, result, get_cache_root() / backend)

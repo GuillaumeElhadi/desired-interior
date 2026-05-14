@@ -28,15 +28,15 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 
 ## HTTP endpoints
 
-| Method | Path                 | Description                                                                         | Request body                          | Response body / status          |
-| ------ | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------- |
-| `GET`  | `/health`            | Liveness probe                                                                      | —                                     | `HealthResponse` (JSON)         |
-| `POST` | `/logs`              | Receive frontend logs                                                               | `LogRequest` (JSON)                   | `204 No Content`                |
-| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                          | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
-| `POST` | `/objects/extract`   | Object background removal                                                           | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
-| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)   | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
-| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
-| `POST` | `/settings`          | Hot-reload runtime settings                                                         | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
+| Method | Path                 | Description                                                                                                                                                                  | Request body                          | Response body / status          |
+| ------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------- |
+| `GET`  | `/health`            | Liveness probe. Response includes `{status, version, bg_removal_backend}` where `bg_removal_backend` ∈ `{"birefnet","bria"}` (diagnostic field, not in shared-types schema). | —                                     | `HealthResponse` (JSON)         |
+| `POST` | `/logs`              | Receive frontend logs                                                                                                                                                        | `LogRequest` (JSON)                   | `204 No Content`                |
+| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                                                                                                                   | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
+| `POST` | `/objects/extract`   | Object background removal                                                                                                                                                    | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
+| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)                                                                                            | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
+| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only                                                                                          | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
+| `POST` | `/settings`          | Hot-reload runtime settings                                                                                                                                                  | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 

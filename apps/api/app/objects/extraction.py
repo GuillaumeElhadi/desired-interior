@@ -1,11 +1,8 @@
-"""Object extraction via BiRefNet on fal.ai + parallel object-type classification.
+"""Object extraction via a pluggable BackgroundRemovalDriver + parallel object-type classification.
 
-BiRefNet (fal-ai/birefnet/v2) removes the background and produces a
-PNG with a clean alpha channel in a single call.
-
-In parallel, a lightweight vision model classifies the object as
-"wall" (paintings, frames, mirrors) or "floor" (furniture, plants).
-The classification is best-effort: failures fall back to "floor".
+The driver (BiRefNet or Bria) removes the background and produces a PNG with a
+clean alpha channel. In parallel, Moondream classifies the object as "wall" or
+"floor". Classification is best-effort: failures fall back to "floor".
 """
 
 import asyncio
@@ -15,10 +12,10 @@ from typing import Any
 import structlog
 
 from app.cloud.fal_client import AsyncFalClient, FalError
+from app.objects.background_removal import BackgroundRemovalDriver
 
 _log = structlog.get_logger()
 
-_BIREFNET_ENDPOINT = "fal-ai/birefnet/v2"
 _MOONDREAM_ENDPOINT = "fal-ai/moondream2/visual-query"
 
 _CLASSIFY_PROMPT = (
@@ -31,30 +28,29 @@ _CLASSIFY_PROMPT = (
 async def extract_object(
     image_bytes: bytes,
     content_type: str,
+    driver: BackgroundRemovalDriver,
     fal: AsyncFalClient,
 ) -> dict[str, Any]:
     b64 = base64.b64encode(image_bytes).decode()
     image_url = f"data:{content_type};base64,{b64}"
 
-    _log.info("object_extract_start", size_bytes=len(image_bytes))
+    _log.info("object_extract_start", size_bytes=len(image_bytes), backend=driver.backend_name)
 
-    # Run BiRefNet + classification in parallel — no added latency
-    birefnet_result, object_type = await asyncio.gather(
-        fal.run(
-            _BIREFNET_ENDPOINT,
-            {
-                "image_url": image_url,
-                "output_format": "png",
-                "refine_foreground": True,
-            },
-        ),
+    # Run background removal + classification in parallel — no added latency
+    bg_result, object_type = await asyncio.gather(
+        driver.remove(image_bytes, content_type=content_type, fal=fal),
         _classify_object_type(image_url, fal),
     )
 
-    parsed = _parse_result(birefnet_result)
-    parsed["object_type"] = object_type
-    _log.info("object_extract_done", url=parsed["url"], object_type=object_type)
-    return parsed
+    result = {
+        "url": bg_result.url,
+        "width": bg_result.width,
+        "height": bg_result.height,
+        "content_type": bg_result.content_type,
+        "object_type": object_type,
+    }
+    _log.info("object_extract_done", url=result["url"], object_type=object_type)
+    return result
 
 
 async def _classify_object_type(image_url: str, fal: AsyncFalClient) -> str:
@@ -74,13 +70,3 @@ async def _classify_object_type(image_url: str, fal: AsyncFalClient) -> str:
     except FalError as exc:
         _log.warning("object_classification_failed", error=str(exc))
         return "floor"
-
-
-def _parse_result(result: dict[str, Any]) -> dict[str, Any]:
-    img = result.get("image") or {}
-    return {
-        "url": img.get("url", ""),
-        "width": img.get("width", 0),
-        "height": img.get("height", 0),
-        "content_type": img.get("content_type", "image/png"),
-    }

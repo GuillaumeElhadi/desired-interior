@@ -9,8 +9,9 @@ from app.cloud.fal_client import (
     FalRateLimitError,
     FalTimeoutError,
 )
-from app.dependencies import get_fal_client
+from app.dependencies import get_bg_driver, get_fal_client
 from app.exceptions import AppError
+from app.objects.background_removal import BackgroundRemovalDriver
 from app.objects.cache import compute_sha256, load_cached, save_cached
 from app.objects.extraction import extract_object
 from app.schemas import ExtractResponse
@@ -40,6 +41,7 @@ def _fal_error_to_app_error(exc: FalError) -> AppError:
 @router.post("/extract", dependencies=[Depends(verify_ipc_token)])
 async def extract(
     image: UploadFile = File(..., description="Object photo (JPEG / PNG / WEBP)"),
+    driver: BackgroundRemovalDriver = Depends(get_bg_driver),
     fal: AsyncFalClient = Depends(get_fal_client),
 ) -> ExtractResponse:
     content_type = image.content_type or "image/jpeg"
@@ -55,17 +57,18 @@ async def extract(
         raise AppError(status_code=400, error_code="empty_file", message="Empty image file")
 
     sha256 = compute_sha256(image_bytes)
-    _log.info("object_extract_request", sha256=sha256, content_type=content_type)
+    backend = driver.backend_name
+    _log.info("object_extract_request", sha256=sha256, content_type=content_type, backend=backend)
 
-    cached = load_cached(sha256)
+    cached = load_cached(sha256, backend=backend)
     if cached is not None:
         return ExtractResponse(**cached)
 
     try:
-        result = await extract_object(image_bytes, content_type, fal)
+        result = await extract_object(image_bytes, content_type, driver, fal)
     except FalError as exc:
         raise _fal_error_to_app_error(exc) from exc
 
     response = ExtractResponse(object_id=sha256, masked=result)
-    save_cached(sha256, response.model_dump())
+    save_cached(sha256, response.model_dump(), backend=backend)
     return response

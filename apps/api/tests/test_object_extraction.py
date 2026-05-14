@@ -14,7 +14,7 @@ from app.dependencies import get_fal_client
 from app.disk_cache import compute_sha256
 from app.main import app
 from app.objects import cache as obj_cache_module
-from app.objects.extraction import _parse_result
+from app.objects.background_removal.birefnet import _parse_result
 from app.scenes import cache as scene_cache_module
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "objects"
@@ -84,19 +84,19 @@ def test_disk_cache_save_and_hit(tmp_obj_cache: Path) -> None:
 
 def test_disk_cache_corrupted_json_clears_entry(tmp_obj_cache: Path) -> None:
     sha = "badentry"
-    d = tmp_obj_cache / sha
-    d.mkdir()
+    d = tmp_obj_cache / "birefnet" / sha
+    d.mkdir(parents=True)
     (d / "result.json").write_text("not-json", encoding="utf-8")
-    assert obj_cache_module.load_cached(sha) is None
+    assert obj_cache_module.load_cached(sha, backend="birefnet") is None
     assert not d.exists()
 
 
 def test_disk_cache_empty_file_clears_entry(tmp_obj_cache: Path) -> None:
     sha = "emptyfile"
-    d = tmp_obj_cache / sha
-    d.mkdir()
+    d = tmp_obj_cache / "birefnet" / sha
+    d.mkdir(parents=True)
     (d / "result.json").write_bytes(b"")
-    assert obj_cache_module.load_cached(sha) is None
+    assert obj_cache_module.load_cached(sha, backend="birefnet") is None
 
 
 def test_scenes_cache_still_works_after_refactor(
@@ -116,23 +116,23 @@ def test_scenes_cache_still_works_after_refactor(
 
 def test_parse_result_standard_shape() -> None:
     r = _parse_result(_BIREFNET_RESPONSE)
-    assert r["url"] == "https://cdn.fal.ai/extracted.png"
-    assert r["width"] == 256
-    assert r["height"] == 256
-    assert r["content_type"] == "image/png"
+    assert r.url == "https://cdn.fal.ai/extracted.png"
+    assert r.width == 256
+    assert r.height == 256
+    assert r.content_type == "image/png"
 
 
 def test_parse_result_missing_image_key() -> None:
     r = _parse_result({})
-    assert r["url"] == ""
-    assert r["width"] == 0
-    assert r["height"] == 0
-    assert r["content_type"] == "image/png"
+    assert r.url == ""
+    assert r.width == 0
+    assert r.height == 0
+    assert r.content_type == "image/png"
 
 
 def test_parse_result_null_image_key() -> None:
     r = _parse_result({"image": None})
-    assert r["url"] == ""
+    assert r.url == ""
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +151,9 @@ async def test_extract_cache_miss_calls_fal_and_caches(
     data = resp.json()
     assert data["masked"]["url"] == "https://cdn.fal.ai/extracted.png"
     assert data["masked"]["object_type"] == "floor"
-    # Two parallel fal.run calls: BiRefNet (mask) + Moondream2 (classification)
+    # Two parallel fal.run calls: BiRefNet (via driver) + Moondream2 (classification)
     assert mock_fal.await_count == 2
-    assert (tmp_obj_cache / data["object_id"] / "result.json").exists()
+    assert (tmp_obj_cache / "birefnet" / data["object_id"] / "result.json").exists()
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ async def test_health_returns_ok() -> None:
     data = response.json()
     assert data["status"] == "ok"
     assert "version" in data
+    assert data["bg_removal_backend"] in {"birefnet", "bria"}
 
 
 @pytest.mark.asyncio
