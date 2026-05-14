@@ -319,7 +319,7 @@ jobs:
       - name: Cache sidecar binary
         id: sidecar-cache
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' && hashFiles('apps/api/pyproject.toml') != ''
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: apps/desktop/src-tauri/binaries
           key: sidecar-${{ runner.os }}-${{ hashFiles('apps/api/app/**', 'apps/api/pyproject.toml', 'apps/api/uv.lock') }}
