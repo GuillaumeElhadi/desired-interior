@@ -548,6 +548,11 @@
             "type": "string",
             "title": "Content Type",
             "default": "image/png"
+          },
+          "object_type": {
+            "type": "string",
+            "title": "Object Type",
+            "default": "floor"
           }
         },
         "type": "object",
@@ -657,6 +662,11 @@
             "type": "array",
             "title": "Bbox",
             "default": []
+          },
+          "surface_type": {
+            "type": "string",
+            "title": "Surface Type",
+            "default": "unknown"
           }
         },
         "type": "object",

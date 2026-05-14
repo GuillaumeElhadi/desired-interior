@@ -72,13 +72,18 @@ async def compose(
             ),
         )
 
-    object_url: str = (object_data.get("masked") or {}).get("url", "")
-    cache_key = make_cache_key(body.scene_id, body.object_id, body.placement, body.style_hints)
+    masked = object_data.get("masked") or {}
+    object_url: str = masked.get("url", "")
+    surface_type: str = masked.get("object_type", "floor")
+    cache_key = make_cache_key(
+        body.scene_id, body.object_id, body.placement, body.style_hints, surface_type
+    )
     _log.info(
         "compose_request",
         scene_id=body.scene_id,
         object_id=body.object_id,
         cache_key=cache_key,
+        surface_type=surface_type,
     )
 
     cached = load_cached(cache_key)
@@ -95,6 +100,7 @@ async def compose(
             placement=body.placement,
             style_hints=body.style_hints,
             fal=fal,
+            surface_type=surface_type,
         )
     except FalError as exc:
         raise _fal_error_to_app_error(exc) from exc
@@ -139,13 +145,18 @@ async def compose_preview(
             ),
         )
 
-    object_url: str = (object_data.get("masked") or {}).get("url", "")
-    cache_key = make_cache_key(body.scene_id, body.object_id, body.placement, body.style_hints)
+    masked = object_data.get("masked") or {}
+    object_url: str = masked.get("url", "")
+    surface_type: str = masked.get("object_type", "floor")
+    cache_key = make_cache_key(
+        body.scene_id, body.object_id, body.placement, body.style_hints, surface_type
+    )
     _log.info(
         "preview_request",
         scene_id=body.scene_id,
         object_id=body.object_id,
         cache_key=cache_key,
+        surface_type=surface_type,
     )
 
     cached = preview_cache_module.load_cached(cache_key)
@@ -162,6 +173,7 @@ async def compose_preview(
             placement=body.placement,
             style_hints=body.style_hints,
             fal=fal,
+            surface_type=surface_type,
         )
     except FalError as exc:
         raise _fal_error_to_app_error(exc) from exc

@@ -155,11 +155,42 @@ def _regions_from_segmentation_png(png_bytes: bytes) -> list[dict[str, Any]]:
                 "score": 1.0,
                 "area": area,
                 "bbox": [x1, y1, x2 - x1, y2 - y1],
+                "surface_type": "unknown",
             }
         )
 
     masks.sort(key=lambda m: m["area"], reverse=True)
+    _label_dominant_surfaces(masks, orig_h)
     return masks
+
+
+def _label_dominant_surfaces(masks: list[dict[str, Any]], img_height: int) -> None:
+    """Mark the largest mask in each half as wall/floor; leave others as 'unknown'.
+
+    Only the dominant background regions get a surface_type — small masks of
+    detected objects (chairs, sofas) remain 'unknown' and are ignored for
+    surface-based auto-placement.
+    """
+    if img_height <= 0:
+        return
+    best_wall = None
+    best_floor = None
+    for m in masks:
+        bbox = m.get("bbox") or []
+        if len(bbox) < 4:
+            continue
+        cy = bbox[1] + bbox[3] / 2
+        cy_norm = cy / img_height
+        if cy_norm < 0.50 and best_wall is None:
+            best_wall = m
+        elif cy_norm >= 0.55 and best_floor is None:
+            best_floor = m
+        if best_wall is not None and best_floor is not None:
+            break
+    if best_wall is not None:
+        best_wall["surface_type"] = "wall"
+    if best_floor is not None:
+        best_floor["surface_type"] = "floor"
 
 
 def _extract_masks(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -177,6 +208,7 @@ def _extract_masks(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "score": float(item.get("score") or item.get("predicted_iou") or 0.0),
                 "area": int(item.get("area") or 0),
                 "bbox": item.get("bbox") or [],
+                "surface_type": "unknown",
             }
         )
     return masks

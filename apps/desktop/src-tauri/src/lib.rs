@@ -81,6 +81,12 @@ fn db_migrations() -> Vec<Migration> {
                   ON renders(scene_id);",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_object_type_column",
+            sql: "ALTER TABLE objects ADD COLUMN object_type TEXT NOT NULL DEFAULT 'floor';",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

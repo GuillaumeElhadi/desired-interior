@@ -59,6 +59,7 @@ const MOCK_OBJECT: db.ObjectRecord = {
   masked_url: "https://cdn.fal.ai/masked.png",
   width: 100,
   height: 100,
+  object_type: "floor",
   created_at: 1_700_000_000,
 };
 
@@ -78,7 +79,16 @@ const MOCK_PLACEMENT: db.PlacementRecord = {
 const DEFAULT_PROPS = {
   sceneId: SCENE_ID,
   imageUrl: "blob:test-room-image",
-  masks: [{ url: "", label: "floor", score: 0.9, area: 240000, bbox: [0, 300, 800, 300] }],
+  masks: [
+    {
+      url: "",
+      label: "floor",
+      score: 0.9,
+      area: 240000,
+      bbox: [0, 300, 800, 300],
+      surface_type: "floor",
+    },
+  ],
 };
 
 function mockImageAutoLoad() {

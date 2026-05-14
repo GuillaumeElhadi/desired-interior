@@ -19,6 +19,7 @@ async def run_preview(
     placement: PlacementSpec,
     style_hints: StyleHints,
     fal: AsyncFalClient,
+    surface_type: str = "floor",
 ) -> dict[str, Any]:
     return await run_composition(
         scene_image_bytes=scene_image_bytes,
@@ -27,4 +28,5 @@ async def run_preview(
         placement=placement,
         style_hints=style_hints,
         fal=fal,
+        surface_type=surface_type,
     )

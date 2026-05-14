@@ -40,9 +40,19 @@ def tmp_obj_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
+_MOONDREAM_FLOOR_RESPONSE = {"output": "floor"}
+
+
 @pytest.fixture
 def mock_fal() -> AsyncMock:
-    mock_run = AsyncMock(return_value=_BIREFNET_RESPONSE)
+    """Route fal.run() by endpoint: BiRefNet → mask response, Moondream → classification."""
+
+    async def dispatch(endpoint: str, _args: dict) -> dict:
+        if "moondream" in endpoint:
+            return _MOONDREAM_FLOOR_RESPONSE
+        return _BIREFNET_RESPONSE
+
+    mock_run = AsyncMock(side_effect=dispatch)
     mock_client = MagicMock(spec=AsyncFalClient)
     mock_client.run = mock_run
     app.dependency_overrides[get_fal_client] = lambda: mock_client
@@ -140,8 +150,60 @@ async def test_extract_cache_miss_calls_fal_and_caches(
     assert resp.status_code == 200
     data = resp.json()
     assert data["masked"]["url"] == "https://cdn.fal.ai/extracted.png"
-    assert mock_fal.await_count == 1
+    assert data["masked"]["object_type"] == "floor"
+    # Two parallel fal.run calls: BiRefNet (mask) + Moondream2 (classification)
+    assert mock_fal.await_count == 2
     assert (tmp_obj_cache / data["object_id"] / "result.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_extract_classifies_wall_when_moondream_says_wall(tmp_obj_cache: Path) -> None:
+    """Moondream returning 'wall' → object_type == 'wall' in the response."""
+
+    async def dispatch(endpoint: str, _args: dict) -> dict:
+        if "moondream" in endpoint:
+            return {"output": "wall"}
+        return _BIREFNET_RESPONSE
+
+    mock_run = AsyncMock(side_effect=dispatch)
+    mock_client = MagicMock(spec=AsyncFalClient)
+    mock_client.run = mock_run
+    app.dependency_overrides[get_fal_client] = lambda: mock_client
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            resp = await c.post(
+                "/objects/extract", files={"image": ("obj.png", _make_png(), "image/png")}
+            )
+        assert resp.status_code == 200
+        assert resp.json()["masked"]["object_type"] == "wall"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_extract_falls_back_to_floor_on_classification_error(tmp_obj_cache: Path) -> None:
+    """Moondream call raising FalError → object_type falls back to 'floor', extraction succeeds."""
+
+    from app.cloud.fal_client import FalError as _FalError
+
+    async def dispatch(endpoint: str, _args: dict) -> dict:
+        if "moondream" in endpoint:
+            raise _FalError("classification down")
+        return _BIREFNET_RESPONSE
+
+    mock_run = AsyncMock(side_effect=dispatch)
+    mock_client = MagicMock(spec=AsyncFalClient)
+    mock_client.run = mock_run
+    app.dependency_overrides[get_fal_client] = lambda: mock_client
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            resp = await c.post(
+                "/objects/extract", files={"image": ("obj.png", _make_png(), "image/png")}
+            )
+        assert resp.status_code == 200
+        assert resp.json()["masked"]["object_type"] == "floor"
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -229,7 +291,8 @@ async def test_extract_with_each_fixture_offline(
     data = resp.json()
     assert data["object_id"] == compute_sha256(image_bytes)
     assert data["masked"]["url"] != ""
-    assert mock_fal.await_count == 1
+    # Two parallel fal.run calls: BiRefNet (mask) + Moondream2 (classification)
+    assert mock_fal.await_count == 2
     mock_fal.reset_mock()
 
 

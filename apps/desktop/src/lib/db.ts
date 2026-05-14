@@ -7,6 +7,7 @@ export interface ObjectRecord {
   masked_url: string;
   width: number;
   height: number;
+  object_type: string;
   created_at: number;
 }
 
@@ -37,7 +38,7 @@ export async function loadObjects(sceneId: string): Promise<ObjectRecord[]> {
 export async function saveObject(record: ObjectRecord): Promise<void> {
   const db = await getDb();
   await db.execute(
-    "INSERT OR IGNORE INTO objects (id, scene_id, name, masked_url, width, height, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    "INSERT OR IGNORE INTO objects (id, scene_id, name, masked_url, width, height, object_type, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
     [
       record.id,
       record.scene_id,
@@ -45,9 +46,15 @@ export async function saveObject(record: ObjectRecord): Promise<void> {
       record.masked_url,
       record.width,
       record.height,
+      record.object_type,
       record.created_at,
     ]
   );
+}
+
+export async function updateObjectType(id: string, objectType: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE objects SET object_type = $1 WHERE id = $2", [objectType, id]);
 }
 
 export async function removeObject(id: string): Promise<void> {

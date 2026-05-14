@@ -35,6 +35,7 @@ const MOCK_OBJECT: ObjectRecord = {
   masked_url: "https://cdn.fal.ai/masked.png",
   width: 256,
   height: 256,
+  object_type: "floor",
   created_at: 1_700_000_000,
 };
 
@@ -45,6 +46,7 @@ const MOCK_EXTRACT_RESPONSE = {
     width: 256,
     height: 256,
     content_type: "image/png",
+    object_type: "floor",
   },
 };
 
