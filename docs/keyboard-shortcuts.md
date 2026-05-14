@@ -27,6 +27,14 @@ These shortcuts are active when the Placement Canvas is visible (a room photo ha
 
 Drag the Konva transform handles to freely resize and rotate. Hold `Shift` while dragging a corner handle to resize proportionally.
 
+### Duplicating a selected object
+
+| Key                | Action                                                       |
+| ------------------ | ------------------------------------------------------------ |
+| `Cmd+D` / `Ctrl+D` | Duplicate the selected placement, offset by 24 px diagonally |
+
+The duplicate becomes the new selection. Repeated duplications cascade the offset so placements never stack. The same action is available via the duplicate icon in the floating toolbar above the selection, or via **right-click → Duplicate**.
+
 ### Deleting a selected object
 
 | Key         | Action                                        |

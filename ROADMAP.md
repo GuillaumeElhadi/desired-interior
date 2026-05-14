@@ -468,14 +468,14 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.1 Object duplication on canvas (UI track)
 
-- [ ] Branch: `feat/canvas-duplicate`
+- [x] Branch: `feat/canvas-duplicate`
 - Add a "duplicate" affordance to placed objects: Cmd/Ctrl+D shortcut, right-click context-menu entry, and a duplicate icon in the floating selection toolbar. Duplicated nodes appear offset by ~24 px on both axes, become the new selection, and inherit the source object's `object_id`, surface_type, scale, and rotation. The auto-stacking rule from task 4.5 still applies so duplicates do not visually overlap their source.
-- **Files:** `apps/desktop/src/components/PlacementCanvas.tsx`, `apps/desktop/src/components/ObjectPanel.tsx`, `apps/desktop/src/lib/placements.ts`, keyboard shortcuts doc.
+- **Files:** `apps/desktop/src/components/PlacementCanvas.tsx`, `apps/desktop/src/lib/placements.ts`, keyboard shortcuts doc.
 - **Acceptance:**
-  - [ ] Cmd/Ctrl+D on a selected placement creates a new placement that round-trips through SQLite persistence
-  - [ ] Right-click → Duplicate on the canvas produces the same result
-  - [ ] Duplicating an object three times yields four non-overlapping placements
-  - [ ] Vitest coverage on the duplication helper + Playwright/Tauri smoke test on the shortcut
+  - [x] Cmd/Ctrl+D on a selected placement creates a new placement that round-trips through SQLite persistence
+  - [x] Right-click → Duplicate on the canvas produces the same result
+  - [x] Duplicating an object three times yields four non-overlapping placements
+  - [x] Vitest coverage on the duplication helper + Playwright/Tauri smoke test on the shortcut _(no Playwright setup in project — covered by Vitest + Testing Library; 6 new tests in PlacementCanvas.test.tsx)_
 
 ### 5.2 Render-mode toggle in the result view (UI track)
 

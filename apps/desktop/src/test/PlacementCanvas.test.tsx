@@ -17,16 +17,19 @@ vi.mock("react-konva", async () => {
     Image: ({
       id,
       onClick,
+      onContextMenu,
     }: {
       id?: string;
       image?: HTMLImageElement;
       onClick?: () => void;
+      onContextMenu?: (e: { evt: MouseEvent }) => void;
       [k: string]: unknown;
     }) => (
       <img
         data-testid={id != null ? `node-${id}` : "room-image"}
         id={id}
         onClick={onClick}
+        onContextMenu={(e) => onContextMenu?.({ evt: e.nativeEvent })}
         alt=""
       />
     ),
@@ -383,6 +386,107 @@ describe("PlacementCanvas — render flow", () => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
     expect(api.compose).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlacementCanvas — duplication", () => {
+  async function renderWithSelected() {
+    vi.mocked(db.loadPlacements).mockResolvedValue([MOCK_PLACEMENT]);
+    vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    const node = await screen.findByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.click(node);
+    // Depth slider appearing confirms selectedId is set and effects have flushed
+    await screen.findByRole("slider", { name: /depth hint/i });
+  }
+
+  it("Cmd+D creates a new placement offset by 24px and persists it", async () => {
+    await renderWithSelected();
+    fireEvent.keyDown(window, { key: "d", metaKey: true });
+    await waitFor(() => {
+      expect(db.savePlacement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scene_id: SCENE_ID,
+          object_id: OBJECT_ID,
+          x: MOCK_PLACEMENT.x + 24,
+          y: MOCK_PLACEMENT.y + 24,
+        })
+      );
+    });
+  });
+
+  it("Ctrl+D creates a new placement offset by 24px and persists it", async () => {
+    await renderWithSelected();
+    fireEvent.keyDown(window, { key: "d", ctrlKey: true });
+    await waitFor(() => {
+      expect(db.savePlacement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scene_id: SCENE_ID,
+          object_id: OBJECT_ID,
+          x: MOCK_PLACEMENT.x + 24,
+          y: MOCK_PLACEMENT.y + 24,
+        })
+      );
+    });
+  });
+
+  it("floating toolbar Duplicate button creates a new placement", async () => {
+    await renderWithSelected();
+    const dupBtn = screen.getByRole("button", { name: /duplicate object/i });
+    fireEvent.click(dupBtn);
+    await waitFor(() => {
+      expect(db.savePlacement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scene_id: SCENE_ID,
+          object_id: OBJECT_ID,
+          x: MOCK_PLACEMENT.x + 24,
+          y: MOCK_PLACEMENT.y + 24,
+        })
+      );
+    });
+  });
+
+  it("right-click shows context menu with Duplicate menuitem", async () => {
+    await renderWithSelected();
+    const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.contextMenu(node, { clientX: 200, clientY: 150 });
+    await waitFor(() => {
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("menuitem", { name: /duplicate/i })).toBeInTheDocument();
+  });
+
+  it("right-click → Duplicate creates a new placement and closes the menu", async () => {
+    await renderWithSelected();
+    const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.contextMenu(node, { clientX: 200, clientY: 150 });
+    const menuItem = await screen.findByRole("menuitem", { name: /duplicate/i });
+    fireEvent.click(menuItem);
+    await waitFor(() => {
+      expect(db.savePlacement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scene_id: SCENE_ID,
+          object_id: OBJECT_ID,
+          x: MOCK_PLACEMENT.x + 24,
+          y: MOCK_PLACEMENT.y + 24,
+        })
+      );
+    });
+    // Menu should close after duplication
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+  });
+
+  it("Escape closes an open context menu", async () => {
+    await renderWithSelected();
+    const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.contextMenu(node, { clientX: 200, clientY: 150 });
+    await screen.findByRole("menu");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
   });
 });
 
