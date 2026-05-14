@@ -15,7 +15,6 @@ import {
 } from "../lib/db";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
-const SNAP_THRESHOLD = 0.2; // snap if within 20% of stage dims
 const PREVIEW_DEBOUNCE_MS = 800;
 
 type RenderPhase = "idle" | "rendering" | "error";
@@ -64,29 +63,68 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-function snapToMask(
-  x: number,
-  y: number,
+/**
+ * Find the best target on the appropriate surface for an object of a given type.
+ *
+ * Returns coordinates in IMAGE pixel space (not stage) — convert with
+ * `imageToStage` before placing on the Konva stage.
+ *
+ * Multi-object spacing: if other objects of the same surface_type already exist,
+ * the new one is offset to avoid stacking on the same point.
+ */
+function findSurfaceTarget(
   masks: PreprocessResponse["masks"],
-  stageWidth: number,
-  stageHeight: number
-): { x: number; y: number } {
-  const threshold = Math.min(stageWidth, stageHeight) * SNAP_THRESHOLD;
-  let best: { x: number; y: number } | null = null;
-  let bestDist = Infinity;
+  surface: "wall" | "floor",
+  existingPlacements: PlacementRecord[],
+  objectsMap: Map<string, { record: ObjectRecord; image: HTMLImageElement }>,
+  objectNaturalSize: { width: number; height: number },
+  imageToStage: (ix: number, iy: number) => { x: number; y: number },
+  stageScale: number
+): { x: number; y: number; scale: number } | null {
+  const target = masks.find((m) => m.surface_type === surface);
+  if (!target || target.bbox.length < 4) return null;
 
-  for (const mask of masks) {
-    if (mask.bbox.length < 4) continue;
-    const [bx, by, bw, bh] = mask.bbox;
-    const cx = bx + bw / 2;
-    const cy = by + bh / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (dist < threshold && dist < bestDist) {
-      bestDist = dist;
-      best = { x: cx, y: cy };
+  const [bx, by, bw, bh] = target.bbox;
+  // image-space → stage-space conversion for scale: a wall fraction in image
+  // pixels maps to the same screen fraction once we apply stageScale.
+  const targetWidthFraction = surface === "wall" ? 0.35 : 0.2;
+  const targetImageWidth = bw * targetWidthFraction;
+  const scale = (targetImageWidth * stageScale) / objectNaturalSize.width;
+
+  // Default target: centre of the surface mask
+  const cxImg = bx + bw / 2;
+  const cyImg = by + bh / 2;
+
+  // Multi-object offset: if same-surface objects already exist, place to the
+  // right of the rightmost one (in stage space).
+  const stageTarget = imageToStage(cxImg, cyImg);
+  let cxStage = stageTarget.x;
+  const cyStage = stageTarget.y;
+
+  const sameSurface = existingPlacements.filter((p) => {
+    const obj = objectsMap.get(p.object_id)?.record;
+    return obj?.object_type === surface;
+  });
+  if (sameSurface.length > 0) {
+    const rightmost = sameSurface.reduce((a, b) => (a.x > b.x ? a : b));
+    const rightmostEntry = objectsMap.get(rightmost.object_id);
+    if (rightmostEntry) {
+      const offsetStage = rightmostEntry.image.naturalWidth * rightmost.scale_x * 1.2;
+      const candidate = rightmost.x + offsetStage;
+      const surfaceRightStage = imageToStage(bx + bw, cyImg).x;
+      const newWidthStage = objectNaturalSize.width * scale;
+      cxStage =
+        candidate + newWidthStage / 2 > surfaceRightStage
+          ? stageTarget.x
+          : candidate + newWidthStage / 2;
     }
   }
-  return best ?? { x, y };
+
+  return {
+    x: cxStage - (objectNaturalSize.width * scale) / 2,
+    y: cyStage - (objectNaturalSize.height * scale) / 2,
+    scale,
+  };
 }
 
 export function PlacementCanvas({
@@ -419,6 +457,40 @@ export function PlacementCanvas({
     abortRef.current?.abort();
   }, []);
 
+  const computeAutoPlacement = useCallback(
+    (
+      entry: { record: ObjectRecord; image: HTMLImageElement },
+      fallbackStageX: number,
+      fallbackStageY: number
+    ): { x: number; y: number; scaleX: number; scaleY: number } => {
+      const surface: "wall" | "floor" = entry.record.object_type === "wall" ? "wall" : "floor";
+      const imageToStage = (ix: number, iy: number) => ({
+        x: ix * scale + roomOffsetX,
+        y: iy * scale + roomOffsetY,
+      });
+      const auto = findSurfaceTarget(
+        masks,
+        surface,
+        placements,
+        objectsMap,
+        { width: entry.image.naturalWidth, height: entry.image.naturalHeight },
+        imageToStage,
+        scale
+      );
+      if (auto) {
+        return { x: auto.x, y: auto.y, scaleX: auto.scale, scaleY: auto.scale };
+      }
+      // Fallback: place at click/drop position with default 15% scale
+      return {
+        x: fallbackStageX - (entry.image.naturalWidth * 0.15) / 2,
+        y: fallbackStageY - (entry.image.naturalHeight * 0.15) / 2,
+        scaleX: 0.15,
+        scaleY: 0.15,
+      };
+    },
+    [masks, placements, objectsMap, scale, roomOffsetX, roomOffsetY]
+  );
+
   const handleClickPlace = useCallback(
     async (clickX: number, clickY: number) => {
       if (!pendingObjectId) return;
@@ -438,16 +510,16 @@ export function PlacementCanvas({
         }
       }
 
-      const { x, y } = snapToMask(clickX, clickY, masks, stageSize.width, stageSize.height);
+      const auto = computeAutoPlacement(entry, clickX, clickY);
 
       const placement: PlacementRecord = {
         id: crypto.randomUUID(),
         scene_id: sceneId,
         object_id: pendingObjectId,
-        x: x - (entry.image.naturalWidth * 0.15) / 2,
-        y: y - (entry.image.naturalHeight * 0.15) / 2,
-        scale_x: 0.15,
-        scale_y: 0.15,
+        x: auto.x,
+        y: auto.y,
+        scale_x: auto.scaleX,
+        scale_y: auto.scaleY,
         rotation: 0,
         depth_hint: 0.5,
         updated_at: Date.now(),
@@ -460,7 +532,14 @@ export function PlacementCanvas({
       onPendingObjectPlaced?.();
       schedulePreview();
     },
-    [pendingObjectId, objectsMap, sceneId, masks, stageSize, onPendingObjectPlaced, schedulePreview]
+    [
+      pendingObjectId,
+      objectsMap,
+      sceneId,
+      computeAutoPlacement,
+      onPendingObjectPlaced,
+      schedulePreview,
+    ]
   );
 
   const handleDrop = useCallback(
@@ -496,16 +575,16 @@ export function PlacementCanvas({
       const rawX = rect ? e.clientX - rect.left : stageSize.width / 2;
       const rawY = rect ? e.clientY - rect.top : stageSize.height / 2;
 
-      const { x, y } = snapToMask(rawX, rawY, masks, stageSize.width, stageSize.height);
+      const auto = computeAutoPlacement(entry, rawX, rawY);
 
       const placement: PlacementRecord = {
         id: crypto.randomUUID(),
         scene_id: sceneId,
         object_id: objectId,
-        x: x - (entry.image.naturalWidth * 0.15) / 2,
-        y: y - (entry.image.naturalHeight * 0.15) / 2,
-        scale_x: 0.15,
-        scale_y: 0.15,
+        x: auto.x,
+        y: auto.y,
+        scale_x: auto.scaleX,
+        scale_y: auto.scaleY,
         rotation: 0,
         depth_hint: 0.5,
         updated_at: Date.now(),
@@ -517,7 +596,7 @@ export function PlacementCanvas({
       containerRef.current?.focus();
       schedulePreview();
     },
-    [objectsMap, sceneId, masks, stageSize, schedulePreview]
+    [objectsMap, sceneId, computeAutoPlacement, stageSize, schedulePreview]
   );
 
   const handleDragEnd = useCallback(

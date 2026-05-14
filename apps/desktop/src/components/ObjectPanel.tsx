@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { extractObject } from "../lib/api";
-import { type ObjectRecord, loadObjects, removeObject, renameObject, saveObject } from "../lib/db";
+import {
+  type ObjectRecord,
+  loadObjects,
+  removeObject,
+  renameObject,
+  saveObject,
+  updateObjectType,
+} from "../lib/db";
 
 interface ObjectPanelProps {
   sceneId: string | null;
@@ -60,6 +67,7 @@ export function ObjectPanel({
           masked_url: result.masked.url,
           width: result.masked.width,
           height: result.masked.height,
+          object_type: result.masked.object_type ?? "floor",
           created_at: Date.now(),
         };
         await saveObject(record);
@@ -109,6 +117,12 @@ export function ObjectPanel({
     },
     [commitRename]
   );
+
+  const handleToggleType = useCallback(async (obj: ObjectRecord) => {
+    const next = obj.object_type === "wall" ? "floor" : "wall";
+    await updateObjectType(obj.id, next);
+    setObjects((prev) => prev.map((o) => (o.id === obj.id ? { ...o, object_type: next } : o)));
+  }, []);
 
   return (
     <aside
@@ -208,7 +222,7 @@ export function ObjectPanel({
                 className="h-14 w-14 flex-shrink-0 rounded object-contain bg-gray-100"
               />
 
-              {/* Name — editable on double-click */}
+              {/* Name + type badge */}
               <div className="min-w-0 flex-1">
                 {renamingId === obj.id ? (
                   <input
@@ -230,6 +244,24 @@ export function ObjectPanel({
                     {obj.name}
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleToggleType(obj);
+                  }}
+                  aria-label={`Surface type: ${obj.object_type}. Click to toggle between wall and floor.`}
+                  title="Click to toggle wall / floor"
+                  className={[
+                    "mt-1 inline-flex min-h-6 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                    obj.object_type === "wall"
+                      ? "bg-blue-50 text-blue-700 hover:bg-blue-100 focus-visible:ring-blue-400"
+                      : "bg-amber-50 text-amber-800 hover:bg-amber-100 focus-visible:ring-amber-400",
+                  ].join(" ")}
+                >
+                  {obj.object_type === "wall" ? "Wall" : "Floor"}
+                </button>
               </div>
 
               {/* Remove — minimum 28×28 px target with SVG icon */}
