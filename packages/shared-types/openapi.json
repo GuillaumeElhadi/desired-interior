@@ -672,6 +672,11 @@
             "type": "number",
             "title": "Depth Hint",
             "default": 0.5
+          },
+          "rotation": {
+            "type": "number",
+            "title": "Rotation",
+            "default": 0.0
           }
         },
         "type": "object",

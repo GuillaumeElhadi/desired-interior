@@ -12,7 +12,6 @@ import io
 import os
 from pathlib import Path
 
-import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from PIL import Image
@@ -139,16 +138,18 @@ async def test_full_pipeline_room_plus_chair(all_caches: Path) -> None:
     image_url: str = compose_payload["image"]["url"]
 
     assert len(composition_id) == 64
-    assert image_url.startswith("https://"), f"Expected HTTPS URL, got: {image_url!r}"
+    # Composition now returns a JPEG data URL (PIL compositing, no fal.ai round-trip)
+    assert image_url.startswith("data:image/jpeg;base64,"), (
+        f"Expected JPEG data URL, got: {image_url!r}"
+    )
 
     # ------------------------------------------------------------------
-    # Step 4 — Download and verify the composed image
+    # Step 4 — Decode and verify the composed image
     # ------------------------------------------------------------------
-    async with httpx.AsyncClient(timeout=30.0) as http:
-        img_resp = await http.get(image_url)
-    assert img_resp.status_code == 200, f"Failed to download composed image from {image_url}"
+    import base64 as _base64
 
-    composed = Image.open(io.BytesIO(img_resp.content))
+    raw_bytes = _base64.b64decode(image_url.split(",", 1)[1])
+    composed = Image.open(io.BytesIO(raw_bytes))
     assert composed.mode in ("RGB", "RGBA"), f"Unexpected image mode: {composed.mode}"
     assert composed.width > 0
     assert composed.height > 0
