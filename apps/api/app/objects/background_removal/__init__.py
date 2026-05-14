@@ -23,7 +23,8 @@ class ExtractionResult:
 
 class BackgroundRemovalDriver(Protocol):
     @property
-    def backend_name(self) -> str: ...
+    def backend_name(self) -> str:
+        pass
 
     async def remove(
         self,
@@ -31,7 +32,8 @@ class BackgroundRemovalDriver(Protocol):
         *,
         content_type: str,
         fal: AsyncFalClient,
-    ) -> ExtractionResult: ...
+    ) -> ExtractionResult:
+        pass
 
 
 def build_bg_driver(backend: str) -> BackgroundRemovalDriver:
