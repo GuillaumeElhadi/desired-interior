@@ -226,12 +226,18 @@ describe("RoomUpload — done state", () => {
 
 describe("RoomUpload — error state", () => {
   it("shows an error alert when preprocess fails", async () => {
-    mockPreprocess.mockRejectedValue(new Error("preprocess failed: 502"));
+    // Throw an ApiError-shaped object so toUserMessage classifies it correctly.
+    mockPreprocess.mockRejectedValue({
+      name: "ApiError",
+      errorCode: "fal_error",
+      httpStatus: 502,
+      message: "ML service returned an error.",
+    });
     render(<RoomUpload />);
     const input = screen.getByLabelText(/choose room photo/i);
     await userEvent.upload(input, makeFile("room.jpg", "image/jpeg"));
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/preprocess failed/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(/render service error|ml service/i);
     });
   });
 });

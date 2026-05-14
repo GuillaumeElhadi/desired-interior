@@ -154,5 +154,6 @@ class UpdateSettingsResponse(BaseModel):
 # documented in docs/IPC.md under "Error response schema".
 class ErrorResponse(BaseModel):
     error: str
+    error_code: str
     message: str
     request_id: str

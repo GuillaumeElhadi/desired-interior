@@ -10,6 +10,76 @@ export type ComposeRequest = components["schemas"]["ComposeRequest"];
 export type ComposeResponse = components["schemas"]["ComposeResponse"];
 export type PreviewComposeResponse = components["schemas"]["PreviewComposeResponse"];
 
+// ---------------------------------------------------------------------------
+// ApiError — structured error thrown by every API call
+// ---------------------------------------------------------------------------
+
+export class ApiError extends Error {
+  readonly errorCode: string;
+  readonly httpStatus: number;
+  readonly requestId: string | undefined;
+
+  constructor(errorCode: string, httpStatus: number, message: string, requestId?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.errorCode = errorCode;
+    this.httpStatus = httpStatus;
+    this.requestId = requestId;
+  }
+
+  static async fromResponse(response: Response): Promise<ApiError> {
+    let errorCode = _statusToCode(response.status);
+    let message = response.statusText || `HTTP ${response.status}`;
+    let requestId: string | undefined;
+    try {
+      // Read text first — body stream can only be consumed once, so we parse
+      // JSON ourselves rather than calling response.json() then response.text().
+      const text = await response.text();
+      try {
+        const body = JSON.parse(text) as Record<string, unknown>;
+        if (typeof body.error_code === "string") errorCode = body.error_code;
+        else if (typeof body.error === "string") errorCode = body.error;
+        if (typeof body.message === "string") message = body.message;
+        if (typeof body.request_id === "string") requestId = body.request_id;
+      } catch {
+        if (text) message = text;
+      }
+    } catch {
+      /* ignore — statusText fallback already set above */
+    }
+    return new ApiError(errorCode, response.status, message, requestId);
+  }
+
+  static fromNetworkError(err: unknown): ApiError {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return new ApiError("offline", 0, "No internet connection");
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return new ApiError("sidecar_unreachable", 0, message);
+  }
+}
+
+function _statusToCode(status: number): string {
+  const map: Record<number, string> = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    409: "conflict",
+    415: "unsupported_media_type",
+    422: "validation_error",
+    429: "rate_limited",
+    502: "bad_gateway",
+    503: "service_unavailable",
+    504: "gateway_timeout",
+  };
+  return map[status] ?? "server_error";
+}
+
+// ---------------------------------------------------------------------------
+// Core fetch helpers
+// ---------------------------------------------------------------------------
+
 export async function getApiBaseUrl(): Promise<string> {
   return invoke<string>("api_base_url");
 }
@@ -30,12 +100,27 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
   });
 }
 
+/** Fetch with auth, parse errors into ApiError, throw on non-ok. */
+async function safeFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  try {
+    const response = await fetchWithAuth(url, options);
+    if (!response.ok) {
+      throw await ApiError.fromResponse(response);
+    }
+    return response;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw ApiError.fromNetworkError(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// API functions
+// ---------------------------------------------------------------------------
+
 export async function checkHealth(): Promise<HealthResponse> {
   const baseUrl = await getApiBaseUrl();
-  const response = await fetchWithAuth(`${baseUrl}/health`);
-  if (!response.ok) {
-    throw new Error(`health check failed: ${response.status}`);
-  }
+  const response = await safeFetch(`${baseUrl}/health`);
   return response.json() as Promise<HealthResponse>;
 }
 
@@ -43,13 +128,10 @@ export async function preprocessScene(file: File): Promise<PreprocessResponse> {
   const baseUrl = await getApiBaseUrl();
   const form = new FormData();
   form.append("image", file);
-  const response = await fetchWithAuth(`${baseUrl}/scenes/preprocess`, {
+  const response = await safeFetch(`${baseUrl}/scenes/preprocess`, {
     method: "POST",
     body: form,
   });
-  if (!response.ok) {
-    throw new Error(`preprocess failed: ${response.status}`);
-  }
   return response.json() as Promise<PreprocessResponse>;
 }
 
@@ -57,13 +139,10 @@ export async function extractObject(file: File): Promise<ExtractResponse> {
   const baseUrl = await getApiBaseUrl();
   const form = new FormData();
   form.append("image", file);
-  const response = await fetchWithAuth(`${baseUrl}/objects/extract`, {
+  const response = await safeFetch(`${baseUrl}/objects/extract`, {
     method: "POST",
     body: form,
   });
-  if (!response.ok) {
-    throw new Error(`extract failed: ${response.status}`);
-  }
   return response.json() as Promise<ExtractResponse>;
 }
 
@@ -72,16 +151,12 @@ export async function compose(
   signal?: AbortSignal
 ): Promise<ComposeResponse> {
   const baseUrl = await getApiBaseUrl();
-  const response = await fetchWithAuth(`${baseUrl}/compose`, {
+  const response = await safeFetch(`${baseUrl}/compose`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
     signal,
   });
-  if (!response.ok) {
-    const msg = await response.text().catch(() => response.statusText);
-    throw new Error(`compose failed: ${response.status} ${msg}`);
-  }
   return response.json() as Promise<ComposeResponse>;
 }
 
@@ -90,40 +165,29 @@ export async function composePreview(
   signal?: AbortSignal
 ): Promise<PreviewComposeResponse> {
   const baseUrl = await getApiBaseUrl();
-  const response = await fetchWithAuth(`${baseUrl}/compose/preview`, {
+  const response = await safeFetch(`${baseUrl}/compose/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
     signal,
   });
-  if (!response.ok) {
-    const msg = await response.text().catch(() => response.statusText);
-    throw new Error(`composePreview failed: ${response.status} ${msg}`);
-  }
   return response.json() as Promise<PreviewComposeResponse>;
 }
 
 export async function updateSettings(body: { fal_key?: string }): Promise<void> {
   const baseUrl = await getApiBaseUrl();
-  const response = await fetchWithAuth(`${baseUrl}/settings`, {
+  await safeFetch(`${baseUrl}/settings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    const msg = await response.text().catch(() => response.statusText);
-    throw new Error(`updateSettings failed: ${response.status} ${msg}`);
-  }
 }
 
 export async function postLog(body: LogRequest): Promise<void> {
   const baseUrl = await getApiBaseUrl();
-  const response = await fetchWithAuth(`${baseUrl}/logs`, {
+  await safeFetch(`${baseUrl}/logs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    throw new Error(`log upload failed: ${response.status}`);
-  }
 }

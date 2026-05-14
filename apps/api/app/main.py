@@ -2,7 +2,7 @@ import importlib.metadata
 import uuid
 
 import structlog
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import MutableHeaders
@@ -22,6 +22,20 @@ from app.settings_router import router as settings_router
 configure_logging()
 
 _log = structlog.get_logger()
+
+_STATUS_TO_CODE: dict[int, str] = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    409: "conflict",
+    415: "unsupported_media_type",
+    422: "validation_error",
+    429: "rate_limited",
+    502: "bad_gateway",
+    503: "service_unavailable",
+    504: "gateway_timeout",
+}
 
 settings = get_settings()
 init_fal_client(build_fal_client(settings))
@@ -100,6 +114,7 @@ class _RequestIdMiddleware:
             _log.error("unhandled_exception", exc_info=exc, path=str(request.url.path))
             error_body = ErrorResponse(
                 error="internal_server_error",
+                error_code="internal_server_error",
                 message="An unexpected error occurred.",
                 request_id=request_id,
             ).model_dump()
@@ -109,6 +124,22 @@ class _RequestIdMiddleware:
 
 
 app.add_middleware(_RequestIdMiddleware)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    ctx = structlog.contextvars.get_contextvars()
+    request_id = str(ctx.get("request_id", uuid.uuid4()))
+    error_code = getattr(exc, "error_code", _STATUS_TO_CODE.get(exc.status_code, "server_error"))
+    body = ErrorResponse(
+        error=error_code,
+        error_code=error_code,
+        message=str(exc.detail),
+        request_id=request_id,
+    ).model_dump()
+    return JSONResponse(status_code=exc.status_code, content=body)
+
+
 app.include_router(scenes_router)
 app.include_router(objects_router)
 app.include_router(compose_router)

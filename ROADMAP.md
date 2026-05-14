@@ -363,11 +363,11 @@
 
 ### 4.3 Robust error states + retry UX
 
-- [ ] Branch: `feat/error-ux`
+- [x] Branch: `feat/error-ux`
 - Map all backend error codes to user-friendly messages with retry CTAs
 - Offline detection
 - **Acceptance:**
-  - [ ] Manual test matrix: kill sidecar, drop wifi, expire API key — each shows the right state
+  - [x] Manual test matrix: kill sidecar, drop wifi, expire API key — each shows the right state
 
 ### 4.4 Telemetry (opt-in, anonymous)
 
