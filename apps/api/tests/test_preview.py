@@ -221,7 +221,7 @@ async def test_preview_missing_scene_returns_404(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         resp = await c.post("/compose/preview", json=_VALID_BODY)
     assert resp.status_code == 404
-    assert "Scene" in resp.json()["detail"]
+    assert "Scene" in resp.json()["message"]
 
 
 @pytest.mark.asyncio
@@ -236,7 +236,7 @@ async def test_preview_missing_object_returns_404(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         resp = await c.post("/compose/preview", json=_VALID_BODY)
     assert resp.status_code == 404
-    assert "Object" in resp.json()["detail"]
+    assert "Object" in resp.json()["message"]
 
 
 @pytest.mark.asyncio

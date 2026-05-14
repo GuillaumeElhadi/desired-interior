@@ -1,13 +1,20 @@
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from app.auth import verify_ipc_token
-from app.cloud.fal_client import AsyncFalClient, FalError, FalRateLimitError, FalTimeoutError
+from app.cloud.fal_client import (
+    AsyncFalClient,
+    FalError,
+    FalKeyMissingError,
+    FalRateLimitError,
+    FalTimeoutError,
+)
 from app.compose import preview_cache as preview_cache_module
 from app.compose.cache import load_cached, save_cached
 from app.compose.composition import make_cache_key, run_composition
 from app.compose.preview import run_preview
 from app.dependencies import get_fal_client
+from app.exceptions import AppError
 from app.objects.cache import load_cached as load_object
 from app.scenes.cache import load_cached as load_scene
 from app.scenes.cache import load_original
@@ -17,6 +24,22 @@ _log = structlog.get_logger()
 router = APIRouter(prefix="/compose", tags=["compose"])
 
 
+def _fal_error_to_app_error(exc: FalError) -> AppError:
+    if isinstance(exc, FalKeyMissingError):
+        return AppError(
+            status_code=503, error_code="fal_key_missing", message="ML service is not configured."
+        )
+    if isinstance(exc, FalTimeoutError):
+        return AppError(status_code=504, error_code="fal_timeout", message="ML service timed out.")
+    if isinstance(exc, FalRateLimitError):
+        return AppError(
+            status_code=429, error_code="fal_rate_limited", message="ML service rate limit reached."
+        )
+    return AppError(
+        status_code=502, error_code="fal_error", message="ML service returned an error."
+    )
+
+
 @router.post("", dependencies=[Depends(verify_ipc_token)])
 async def compose(
     body: ComposeRequest,
@@ -24,17 +47,26 @@ async def compose(
 ) -> ComposeResponse:
     scene_data = load_scene(body.scene_id)
     if scene_data is None:
-        raise HTTPException(status_code=404, detail=f"Scene {body.scene_id!r} not found in cache")
+        raise AppError(
+            status_code=404,
+            error_code="scene_not_found",
+            message="Scene not found — re-upload the room photo.",
+        )
 
     object_data = load_object(body.object_id)
     if object_data is None:
-        raise HTTPException(status_code=404, detail=f"Object {body.object_id!r} not found in cache")
+        raise AppError(
+            status_code=404,
+            error_code="object_not_found",
+            message="Object not found — re-upload the furniture photo.",
+        )
 
     scene_image_bytes = load_original(body.scene_id)
     if scene_image_bytes is None:
-        raise HTTPException(
+        raise AppError(
             status_code=409,
-            detail=(
+            error_code="scene_original_missing",
+            message=(
                 f"Original image for scene {body.scene_id!r} is not cached. "
                 "Re-run /scenes/preprocess to rebuild the cache."
             ),
@@ -53,8 +85,6 @@ async def compose(
     if cached is not None:
         return ComposeResponse(**cached)
 
-    # Detect original content type from cached scene metadata (depth_map content_type
-    # is not stored, so fall back to JPEG which is the most common upload format).
     scene_content_type = "image/jpeg"
 
     try:
@@ -66,12 +96,8 @@ async def compose(
             style_hints=body.style_hints,
             fal=fal,
         )
-    except FalTimeoutError as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
-    except FalRateLimitError as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except FalError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise _fal_error_to_app_error(exc) from exc
 
     response = ComposeResponse(
         composition_id=cache_key,
@@ -88,17 +114,26 @@ async def compose_preview(
 ) -> PreviewComposeResponse:
     scene_data = load_scene(body.scene_id)
     if scene_data is None:
-        raise HTTPException(status_code=404, detail=f"Scene {body.scene_id!r} not found in cache")
+        raise AppError(
+            status_code=404,
+            error_code="scene_not_found",
+            message="Scene not found — re-upload the room photo.",
+        )
 
     object_data = load_object(body.object_id)
     if object_data is None:
-        raise HTTPException(status_code=404, detail=f"Object {body.object_id!r} not found in cache")
+        raise AppError(
+            status_code=404,
+            error_code="object_not_found",
+            message="Object not found — re-upload the furniture photo.",
+        )
 
     scene_image_bytes = load_original(body.scene_id)
     if scene_image_bytes is None:
-        raise HTTPException(
+        raise AppError(
             status_code=409,
-            detail=(
+            error_code="scene_original_missing",
+            message=(
                 f"Original image for scene {body.scene_id!r} is not cached. "
                 "Re-run /scenes/preprocess to rebuild the cache."
             ),
@@ -128,12 +163,8 @@ async def compose_preview(
             style_hints=body.style_hints,
             fal=fal,
         )
-    except FalTimeoutError as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
-    except FalRateLimitError as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except FalError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise _fal_error_to_app_error(exc) from exc
 
     response = PreviewComposeResponse(
         preview_id=cache_key,

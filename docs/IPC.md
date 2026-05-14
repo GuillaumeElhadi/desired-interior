@@ -120,17 +120,34 @@ Calling `POST /settings` with a `fal_key` rebuilds the fal.ai client immediately
 
 ### Error response schema
 
-All unhandled exceptions return a structured JSON body:
+All error responses (HTTP 4xx/5xx raised by route handlers, plus unhandled 500s) return a structured JSON body:
 
 ```json
 {
-  "error": "internal_server_error",
-  "message": "An unexpected error occurred.",
+  "error": "<error_code>",
+  "error_code": "<error_code>",
+  "message": "Human-readable description.",
   "request_id": "<per-request UUID set by the middleware>"
 }
 ```
 
-The `X-Request-ID` response header contains the same UUID.
+Both `error` and `error_code` carry the same typed code (the duplicate exists for backwards compatibility). The `X-Request-ID` response header contains the same UUID.
+
+**Typed error codes** (use `error_code` on the frontend for classification):
+
+| `error_code`             | HTTP status | Cause                                              |
+| ------------------------ | ----------- | -------------------------------------------------- |
+| `fal_key_missing`        | 503         | `FAL_KEY` not configured — direct user to Settings |
+| `fal_timeout`            | 504         | fal.ai call timed out — retry                      |
+| `fal_rate_limited`       | 429         | fal.ai rate limit — wait and retry                 |
+| `fal_error`              | 502         | Generic fal.ai error — retry                       |
+| `scene_not_found`        | 404         | Scene not in cache — re-upload room photo          |
+| `object_not_found`       | 404         | Object not in cache — re-upload object photo       |
+| `scene_original_missing` | 409         | Original image missing from cache — re-preprocess  |
+| `unsupported_media_type` | 415         | File format not accepted                           |
+| `empty_file`             | 400         | Zero-byte upload                                   |
+| `unauthorized`           | 401         | IPC token rejected — restart app                   |
+| `internal_server_error`  | 500         | Unhandled exception                                |
 
 ## Security model
 

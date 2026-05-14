@@ -41,6 +41,10 @@ class FalRateLimitError(FalError):
     """fal.ai returned HTTP 429 — request was rate-limited."""
 
 
+class FalKeyMissingError(FalError):
+    """FAL_KEY is not configured — the fal.ai client was built without a key."""
+
+
 class FalMalformedResponseError(FalError):
     """fal.ai returned a response that does not match the expected shape."""
 
@@ -108,7 +112,7 @@ class AsyncFalClient:
 
     async def _call(self, endpoint: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if self._sdk_client is None:
-            raise FalError(
+            raise FalKeyMissingError(
                 "FAL_KEY is not configured — set FAL_KEY env var or add it to .env.local"
             )
 
@@ -135,7 +139,7 @@ class AsyncFalClient:
             raise
         except Exception as exc:
             _log.error("fal_unexpected_error", endpoint=endpoint, exc_info=exc)
-            raise FalError(f"fal.ai call to {endpoint!r} failed: {exc}") from exc
+            raise FalError("ML service returned an unexpected error.") from exc
 
         if not isinstance(result, dict):
             raise FalMalformedResponseError(

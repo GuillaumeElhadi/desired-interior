@@ -4,6 +4,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { invoke } from "@tauri-apps/api/core";
 import {
+  ApiError,
   checkHealth,
   compose,
   composePreview,
@@ -47,10 +48,31 @@ describe("checkHealth", () => {
     });
   });
 
-  it("throws on non-ok response", async () => {
+  it("throws ApiError on non-ok response", async () => {
     setupInvokeMocks();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
-    await expect(checkHealth()).rejects.toThrow("health check failed: 503");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        json: () =>
+          Promise.resolve({ error_code: "service_unavailable", message: "down", request_id: "r1" }),
+      })
+    );
+    await expect(checkHealth()).rejects.toBeInstanceOf(ApiError);
+    await expect(checkHealth()).rejects.toMatchObject({
+      errorCode: "service_unavailable",
+      httpStatus: 503,
+    });
+  });
+
+  it("throws ApiError with sidecar_unreachable on network failure", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    await expect(checkHealth()).rejects.toBeInstanceOf(ApiError);
+    await expect(checkHealth()).rejects.toMatchObject({ errorCode: "sidecar_unreachable" });
   });
 });
 
@@ -84,10 +106,24 @@ describe("postLog", () => {
     });
   });
 
-  it("throws on non-ok response", async () => {
+  it("throws ApiError on non-ok response", async () => {
     setupInvokeMocks();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
-    await expect(postLog({ entries: [] })).rejects.toThrow("log upload failed: 500");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        json: () =>
+          Promise.resolve({
+            error_code: "internal_server_error",
+            message: "boom",
+            request_id: "r2",
+          }),
+      })
+    );
+    await expect(postLog({ entries: [] })).rejects.toBeInstanceOf(ApiError);
+    await expect(postLog({ entries: [] })).rejects.toMatchObject({ httpStatus: 500 });
   });
 });
 
@@ -148,17 +184,57 @@ describe("compose", () => {
     );
   });
 
-  it("throws with status when response is not ok", async () => {
+  it("throws ApiError with fal_timeout on 504", async () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
         status: 504,
-        text: () => Promise.resolve("upstream timeout"),
+        statusText: "Gateway Timeout",
+        json: () =>
+          Promise.resolve({ error_code: "fal_timeout", message: "timed out", request_id: "r3" }),
       })
     );
-    await expect(compose(COMPOSE_REQUEST)).rejects.toThrow("compose failed: 504");
+    await expect(compose(COMPOSE_REQUEST)).rejects.toBeInstanceOf(ApiError);
+    await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_timeout",
+      httpStatus: 504,
+    });
+  });
+
+  it("throws ApiError with fal_key_missing on 503", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        json: () =>
+          Promise.resolve({ error_code: "fal_key_missing", message: "no key", request_id: "r4" }),
+      })
+    );
+    await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({ errorCode: "fal_key_missing" });
+  });
+
+  it("throws ApiError with fal_rate_limited on 429", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        json: () =>
+          Promise.resolve({
+            error_code: "fal_rate_limited",
+            message: "slow down",
+            request_id: "r5",
+          }),
+      })
+    );
+    await expect(compose(COMPOSE_REQUEST)).rejects.toMatchObject({ errorCode: "fal_rate_limited" });
   });
 });
 
@@ -219,17 +295,20 @@ describe("composePreview", () => {
     );
   });
 
-  it("throws with status when response is not ok", async () => {
+  it("throws ApiError on non-ok response", async () => {
     setupInvokeMocks();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
         status: 504,
-        text: () => Promise.resolve("upstream timeout"),
+        statusText: "Gateway Timeout",
+        json: () =>
+          Promise.resolve({ error_code: "fal_timeout", message: "timed out", request_id: "r6" }),
       })
     );
-    await expect(composePreview(COMPOSE_REQUEST)).rejects.toThrow("composePreview failed: 504");
+    await expect(composePreview(COMPOSE_REQUEST)).rejects.toBeInstanceOf(ApiError);
+    await expect(composePreview(COMPOSE_REQUEST)).rejects.toMatchObject({ httpStatus: 504 });
   });
 });
 
@@ -270,10 +349,20 @@ describe("preprocessScene", () => {
     expect(body.get("image")).toBe(file);
   });
 
-  it("throws on non-ok response", async () => {
+  it("throws ApiError on non-ok response", async () => {
     setupInvokeMocks();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502 }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: () =>
+          Promise.resolve({ error_code: "fal_error", message: "fal.ai error", request_id: "r7" }),
+      })
+    );
     const file = new File([], "room.jpg", { type: "image/jpeg" });
-    await expect(preprocessScene(file)).rejects.toThrow("preprocess failed: 502");
+    await expect(preprocessScene(file)).rejects.toBeInstanceOf(ApiError);
+    await expect(preprocessScene(file)).rejects.toMatchObject({ errorCode: "fal_error" });
   });
 });

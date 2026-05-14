@@ -14,6 +14,7 @@ import pytest
 from app.cloud.fal_client import (
     AsyncFalClient,
     FalError,
+    FalKeyMissingError,
     FalMalformedResponseError,
     FalRateLimitError,
     FalTimeoutError,
@@ -147,10 +148,17 @@ async def test_run_raises_malformed_when_result_is_string(mock_sdk_run: AsyncMoc
 
 
 @pytest.mark.asyncio
-async def test_run_raises_fal_error_when_key_is_none() -> None:
+async def test_run_raises_fal_key_missing_when_key_is_none() -> None:
     # No SDK mock needed — client is never created when key=None
     client = AsyncFalClient(key=None, timeout_s=60.0, max_retries=1)
-    with pytest.raises(FalError, match="FAL_KEY"):
+    with pytest.raises(FalKeyMissingError, match="FAL_KEY"):
+        await client.run(_ENDPOINT, _ARGS)
+
+
+@pytest.mark.asyncio
+async def test_fal_key_missing_is_subclass_of_fal_error() -> None:
+    client = AsyncFalClient(key=None, timeout_s=60.0, max_retries=1)
+    with pytest.raises(FalError):
         await client.run(_ENDPOINT, _ARGS)
 
 

@@ -2,6 +2,7 @@ import Konva from "konva";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
 import { type ComposeResponse, type PreprocessResponse, compose, composePreview } from "../lib/api";
+import { toUserMessage } from "../lib/errors";
 import {
   type ObjectRecord,
   type PlacementRecord,
@@ -18,6 +19,12 @@ const SNAP_THRESHOLD = 0.2; // snap if within 20% of stage dims
 const PREVIEW_DEBOUNCE_MS = 800;
 
 type RenderPhase = "idle" | "rendering" | "error";
+
+interface RenderErrorInfo {
+  title: string;
+  detail: string;
+  cta: "retry" | "settings" | "reload" | "wait" | "none";
+}
 type PreviewPhase = "idle" | "pending" | "generating" | "ready" | "error";
 
 interface RenderResult {
@@ -99,6 +106,7 @@ export function PlacementCanvas({
   const previewAbortRef = useRef<AbortController | null>(null);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewGenRef = useRef(0);
+  const errorDismissRef = useRef<HTMLButtonElement>(null);
 
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [roomImage, setRoomImage] = useState<HTMLImageElement | null>(null);
@@ -108,9 +116,17 @@ export function PlacementCanvas({
   >(new Map());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renderPhase, setRenderPhase] = useState<RenderPhase>("idle");
-  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<RenderErrorInfo | null>(null);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("idle");
   const [previewImage, setPreviewImage] = useState<HTMLImageElement | null>(null);
+
+  // Move keyboard focus to the dismiss button whenever a render error appears
+  // so screen reader users and keyboard-only users are landed on the alert.
+  useEffect(() => {
+    if (renderPhase === "error") {
+      errorDismissRef.current?.focus();
+    }
+  }, [renderPhase]);
 
   // Measure container
   useEffect(() => {
@@ -325,7 +341,11 @@ export function PlacementCanvas({
   const handleRender = useCallback(async () => {
     if (!falKeyConfigured) {
       setRenderPhase("error");
-      setRenderError("No API key configured. Go to Settings to add your fal.ai key.");
+      setRenderError({
+        title: "API key not configured",
+        detail: "Add your fal.ai API key in Settings before rendering.",
+        cta: "settings",
+      });
       return;
     }
     const target = placements.find((p) => p.id === selectedId) ?? placements[placements.length - 1];
@@ -342,7 +362,11 @@ export function PlacementCanvas({
 
     if (bbox.width <= 0 || bbox.height <= 0) {
       setRenderPhase("error");
-      setRenderError("Object has zero or negative dimensions — reset its scale and try again.");
+      setRenderError({
+        title: "Invalid placement",
+        detail: "Object has zero or negative dimensions — reset its scale and try again.",
+        cta: "none",
+      });
       return;
     }
 
@@ -374,9 +398,9 @@ export function PlacementCanvas({
       if (err instanceof Error && err.name === "AbortError") {
         setRenderPhase("idle");
       } else {
-        // Show a safe generic message; the raw error may contain sidecar internals.
+        const msg = toUserMessage(err);
         setRenderPhase("error");
-        setRenderError("Render failed. Please try again.");
+        setRenderError(msg);
       }
     }
   }, [
@@ -713,38 +737,50 @@ export function PlacementCanvas({
 
       {/* Error overlay */}
       {renderPhase === "error" && renderError && (
-        <div className="absolute bottom-4 right-4 z-10 flex max-w-xs flex-col items-end gap-2">
+        <div className="absolute bottom-4 right-4 z-10 flex max-w-sm flex-col items-start gap-2">
           <div role="alert" className="rounded-lg bg-red-900/80 px-3 py-2 text-xs text-red-100">
-            {renderError}
+            <p className="font-semibold">{renderError.title}</p>
+            <p className="mt-0.5 text-red-200">{renderError.detail}</p>
           </div>
           <div className="flex gap-2">
             <button
+              ref={errorDismissRef}
               type="button"
               onClick={() => setRenderPhase("idle")}
-              className="rounded px-2 py-1 text-xs text-white/60 underline underline-offset-2 hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+              className="rounded-md border border-white/40 px-2 py-1 text-xs text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
               Dismiss
             </button>
-            {!falKeyConfigured && onOpenSettings ? (
+            {renderError.cta === "settings" && onOpenSettings ? (
               <button
                 type="button"
                 onClick={() => {
                   setRenderPhase("idle");
                   onOpenSettings();
                 }}
-                className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+                className="rounded-md bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
               >
                 Open Settings
               </button>
-            ) : (
+            ) : renderError.cta === "retry" ? (
               <button
                 type="button"
                 onClick={() => void handleRender()}
-                className="rounded bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+                className="rounded-md bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
               >
                 Retry
               </button>
-            )}
+            ) : renderError.cta === "reload" ? (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-md bg-brand-accent px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+              >
+                Reload
+              </button>
+            ) : renderError.cta === "wait" ? (
+              <span className="text-xs text-white/70">Wait a moment, then retry.</span>
+            ) : null}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { PreprocessResponse } from "../lib/api";
 import { preprocessScene } from "../lib/api";
+import { toUserMessage } from "../lib/errors";
 
 export interface SceneContext {
   sceneId: string;
@@ -21,7 +22,14 @@ type UploadState =
   | { phase: "idle" }
   | { phase: "preprocessing"; file: File; objectUrl: string }
   | { phase: "done"; file: File; objectUrl: string; sceneId: string }
-  | { phase: "error"; file: File | null; objectUrl: string | null; message: string };
+  | {
+      phase: "error";
+      file: File | null;
+      objectUrl: string | null;
+      title: string;
+      detail: string;
+      canRetry: boolean;
+    };
 
 interface RoomUploadProps {
   disabled?: boolean;
@@ -47,7 +55,14 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
     async (file: File) => {
       const error = validateFile(file);
       if (error) {
-        setState({ phase: "error", file, objectUrl: null, message: error });
+        setState({
+          phase: "error",
+          file,
+          objectUrl: null,
+          title: "Invalid file",
+          detail: error,
+          canRetry: false,
+        });
         return;
       }
       const objectUrl = URL.createObjectURL(file);
@@ -57,7 +72,15 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
         setState({ phase: "done", file, objectUrl, sceneId: result.scene_id });
         onSceneReady?.({ sceneId: result.scene_id, imageUrl: objectUrl, masks: result.masks });
       } catch (err) {
-        setState({ phase: "error", file, objectUrl, message: String(err) });
+        const msg = toUserMessage(err);
+        setState({
+          phase: "error",
+          file,
+          objectUrl,
+          title: msg.title,
+          detail: msg.detail,
+          canRetry: msg.cta === "retry",
+        });
       }
     },
     [onSceneReady]
@@ -198,9 +221,19 @@ export function RoomUpload({ disabled = false, onSceneReady }: RoomUploadProps) 
       {state.phase === "done" && <p className="text-sm font-medium text-green-600">Scene ready</p>}
 
       {state.phase === "error" && (
-        <p role="alert" className="max-w-sm text-center text-sm text-red-600">
-          {state.message}
-        </p>
+        <div role="alert" className="flex max-w-sm flex-col items-center gap-2 text-center">
+          <p className="text-sm font-medium text-red-700">{state.title}</p>
+          <p className="text-sm text-red-600">{state.detail}</p>
+          {state.canRetry && state.file && (
+            <button
+              type="button"
+              onClick={() => void handleFile(state.file!)}
+              className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
       {/* Disabled during preprocessing to prevent orphaned promise from writing

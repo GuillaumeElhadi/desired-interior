@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { OfflineBanner } from "./components/OfflineBanner";
 import { ObjectPanel } from "./components/ObjectPanel";
 import { PlacementCanvas } from "./components/PlacementCanvas";
 import { ResultView } from "./components/ResultView";
 import { RoomUpload, type SceneContext } from "./components/RoomUpload";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { checkHealth, updateSettings } from "./lib/api";
+import { useOnlineStatus } from "./hooks/useOnlineStatus";
+import { ApiError, checkHealth, updateSettings } from "./lib/api";
+import { toUserMessage } from "./lib/errors";
 import { loadSettings } from "./lib/settings";
 
 interface HealthState {
   status: "loading" | "ok" | "error";
   version?: string;
   error?: string;
+  errorCode?: string;
 }
 
 // Retry checkHealth until the PyInstaller sidecar finishes starting.
@@ -51,6 +55,8 @@ function App() {
   const [pendingObjectId, setPendingObjectId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [falKeyConfigured, setFalKeyConfigured] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const isOnline = useOnlineStatus();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,10 +75,17 @@ function App() {
 
     init().catch((err: unknown) => {
       if (String(err).includes("aborted")) return;
-      setHealth({ status: "error", error: String(err) });
+      const msg = toUserMessage(err);
+      const code = err instanceof ApiError ? err.errorCode : "unknown";
+      setHealth({ status: "error", error: msg.detail, errorCode: code });
     });
 
     return () => controller.abort();
+  }, [retryCount]);
+
+  const handleRetryHealth = useCallback(() => {
+    setHealth({ status: "loading" });
+    setRetryCount((c) => c + 1);
   }, []);
 
   return (
@@ -86,16 +99,30 @@ function App() {
               aria-haspopup="dialog"
               aria-label="Configure fal.ai API key — required for rendering"
               onClick={() => setShowSettings(true)}
-              className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100"
+              className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-300 hover:bg-amber-100"
             >
               <span aria-hidden="true">⚠</span> Configure API key
             </button>
           )}
-          <span className="text-xs text-gray-400">
-            {health.status === "loading" && "Connecting to API…"}
-            {health.status === "ok" && `API healthy · v${health.version}`}
+          <span
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="text-xs text-gray-400"
+          >
+            {health.status === "loading" && "Connecting…"}
+            {health.status === "ok" && `API v${health.version}`}
             {health.status === "error" && (
-              <span className="text-red-500">API error: {health.error}</span>
+              <span className="inline-flex items-center gap-2 text-red-600">
+                {health.errorCode === "sidecar_unreachable" ? "Service unavailable" : "API error"}
+                <button
+                  type="button"
+                  onClick={handleRetryHealth}
+                  className="rounded-md bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                >
+                  Retry
+                </button>
+              </span>
             )}
           </span>
           <button
@@ -128,6 +155,8 @@ function App() {
           </button>
         </div>
       </header>
+
+      {!isOnline && <OfflineBanner />}
 
       {showSettings && (
         <SettingsPanel
