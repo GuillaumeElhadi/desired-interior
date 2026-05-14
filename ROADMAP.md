@@ -379,7 +379,20 @@
   - [x] Preview is near-instant (no Flux Schnell round-trip)
   - [x] All offline composition/preview tests pass + e2e test updated
 
-### 4.5 Telemetry (opt-in, anonymous)
+### 4.5 Smart auto-placement by object type + soft shadow rendering
+
+- [x] Branch: `feat/smart-placement`
+- When the user adds an object the app should detect whether it's wall-mounted (painting, frame, mirror) or floor-standing (furniture, plant, lamp) and auto-position it on the appropriate detected surface, at a sensible initial scale. The user can still drag/scale freely afterwards or toggle the type via a badge in the object panel. Adds a parallel Moondream2 classification call alongside BiRefNet during extraction (zero added latency), labels the dominant wall/floor masks during preprocessing (only the largest mask in each image half is tagged), and renders soft shadows in PIL (elliptical ground shadow for floor objects, drop-shadow for wall objects) for visual integration.
+- **Acceptance:**
+  - [x] `POST /objects/extract` returns `object_type` ∈ {`wall`, `floor`}; falls back to `floor` if Moondream is unavailable
+  - [x] `POST /scenes/preprocess` returns masks with `surface_type` ∈ {`wall`, `floor`, `unknown`}; at most one of each
+  - [x] Placing a wall object auto-snaps to the wall mask centroid at ~35% of wall width
+  - [x] Placing a floor object auto-snaps to the floor mask centroid at ~20% of floor width
+  - [x] Multiple objects of the same surface type don't stack — they offset horizontally
+  - [x] ObjectPanel shows a Wall/Floor badge; click toggles the type and persists via SQLite migration v4
+  - [x] Rendered composite shows an elliptical ground shadow under floor objects or a drop-shadow behind wall objects
+
+### 4.6 Telemetry (opt-in, anonymous)
 
 - [ ] Branch: `feat/telemetry`
 - Use Plausible or PostHog with opt-in consent
