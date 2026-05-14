@@ -11,8 +11,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from app.auth import verify_ipc_token
 from app.cloud.fal_client import build_fal_client
 from app.compose.router import router as compose_router
-from app.dependencies import init_fal_client
+from app.dependencies import get_bg_driver, init_bg_driver, init_fal_client
 from app.logging_config import configure_logging
+from app.objects.background_removal import build_bg_driver
 from app.objects.router import router as objects_router
 from app.scenes.router import router as scenes_router
 from app.schemas import ErrorResponse, HealthResponse, LogRequest
@@ -39,6 +40,7 @@ _STATUS_TO_CODE: dict[int, str] = {
 
 settings = get_settings()
 init_fal_client(build_fal_client(settings))
+init_bg_driver(build_bg_driver(settings.bg_removal_backend))
 
 if settings.fal_key is None:
     _log.warning(
@@ -146,13 +148,22 @@ app.include_router(compose_router)
 app.include_router(settings_router)
 
 
-@app.get("/health", dependencies=[Depends(verify_ipc_token)])
-def health() -> HealthResponse:
+@app.get("/health", response_model=HealthResponse, dependencies=[Depends(verify_ipc_token)])
+def health() -> JSONResponse:
     try:
         version = importlib.metadata.version("interior-vision-api")
     except importlib.metadata.PackageNotFoundError:
         version = "0.0.0"
-    return HealthResponse(status="ok", version=version)
+    # Return JSONResponse directly so bg_removal_backend is included in the
+    # payload without leaking into the OpenAPI schema (HealthResponse stays
+    # at {status, version} — codegen remains a no-op).
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "version": version,
+            "bg_removal_backend": get_bg_driver().backend_name,
+        }
+    )
 
 
 @app.post("/logs", dependencies=[Depends(verify_ipc_token)])

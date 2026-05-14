@@ -181,6 +181,76 @@ def test_settings_fal_key_optional() -> None:
 
 
 # ---------------------------------------------------------------------------
+# fetch_bytes
+# ---------------------------------------------------------------------------
+
+
+def _make_stream_mock(*, raise_status: httpx.HTTPStatusError | None = None) -> MagicMock:
+    """Build a minimal mock for httpx.AsyncClient().stream(...)."""
+    mock_resp = MagicMock()
+    if raise_status:
+        mock_resp.raise_for_status = MagicMock(side_effect=raise_status)
+    else:
+        mock_resp.raise_for_status = MagicMock()
+
+    async def _aiter_bytes():
+        yield b"fake-png-bytes"
+
+    mock_resp.aiter_bytes = _aiter_bytes
+
+    stream_ctx = MagicMock()
+    stream_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
+    stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    http_client = MagicMock()
+    http_client.stream = MagicMock(return_value=stream_ctx)
+
+    client_ctx = MagicMock()
+    client_ctx.__aenter__ = AsyncMock(return_value=http_client)
+    client_ctx.__aexit__ = AsyncMock(return_value=False)
+    return client_ctx
+
+
+@pytest.mark.asyncio
+async def test_fetch_bytes_success() -> None:
+    client = _make_client()
+    cdn_url = "https://cdn.fal.ai/test.png"
+    with patch("app.cloud.fal_client.httpx.AsyncClient", return_value=_make_stream_mock()):
+        result = await client.fetch_bytes(cdn_url)
+    assert result == b"fake-png-bytes"
+
+
+@pytest.mark.asyncio
+async def test_fetch_bytes_cdn_http_error_raises_malformed() -> None:
+    """CDN returning non-200 must raise FalMalformedResponseError, not raw httpx error."""
+    client = _make_client()
+    cdn_url = "https://cdn.fal.ai/test.png"
+    req = httpx.Request("GET", cdn_url)
+    resp = httpx.Response(403, request=req)
+    cdn_error = httpx.HTTPStatusError("HTTP 403", request=req, response=resp)
+    with patch(
+        "app.cloud.fal_client.httpx.AsyncClient",
+        return_value=_make_stream_mock(raise_status=cdn_error),
+    ):
+        with pytest.raises(FalMalformedResponseError, match="403"):
+            await client.fetch_bytes(cdn_url)
+
+
+@pytest.mark.asyncio
+async def test_fetch_bytes_blocks_untrusted_url() -> None:
+    client = _make_client()
+    with pytest.raises(FalMalformedResponseError, match="untrusted"):
+        await client.fetch_bytes("https://evil.com/image.png")
+
+
+@pytest.mark.asyncio
+async def test_fetch_bytes_blocks_http_scheme() -> None:
+    client = _make_client()
+    with pytest.raises(FalMalformedResponseError, match="untrusted"):
+        await client.fetch_bytes("http://cdn.fal.ai/test.png")
+
+
+# ---------------------------------------------------------------------------
 # Live tests — require real FAL_KEY, skipped otherwise
 # ---------------------------------------------------------------------------
 

@@ -437,7 +437,7 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 4.7 Pluggable background-removal driver
 
-- [ ] Branch: `feat/bg-removal-driver`
+- [x] Branch: `feat/bg-removal-driver`
 - Goal: decouple `/objects/extract` from any single fal.ai model so we can A/B-test `BiRefNet` against `fal-ai/bria/remove-background` on real decoration objects and keep the option to add more drivers later — without rewiring the object pipeline. Today `apps/api/app/objects/extraction.py` calls BiRefNet directly through `AsyncFalClient`; this is what 4.7 abstracts away.
 - **Steps:**
   - Introduce a `BackgroundRemovalDriver` protocol in `apps/api/app/objects/background_removal/__init__.py` with a single async method `async def remove(self, image_bytes: bytes, *, content_type: str) -> ExtractionResult` returning the existing extraction result shape (PNG URL + metadata). All fal.ai SDK access stays funnelled through `app/cloud/fal_client.py` (architecture-keeper enforces).
@@ -448,12 +448,12 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
   - Wire the driver into `apps/api/app/objects/extraction.py` via dependency injection (so tests can pass a fake driver).
   - Document the abstraction in `docs/ML_PIPELINE.md` and update the "Vision technique" pointer above.
 - **Acceptance:**
-  - [ ] `BG_REMOVAL_BACKEND=birefnet` (or unset) yields identical output bytes to the pre-refactor pipeline on the 5 fixture objects from task 2.3 (regression: hash-compare the cached PNGs)
-  - [ ] `BG_REMOVAL_BACKEND=bria` round-trips the same 5 fixtures and produces a valid alpha-channel PNG (mocked fal response in unit tests; one `@pytest.mark.live` integration test gated on `FAL_KEY`)
-  - [ ] An invalid value for `BG_REMOVAL_BACKEND` fails startup with a clear pydantic-settings error
-  - [ ] `architecture-keeper` agent passes — no fal SDK import outside `app/cloud/`
-  - [ ] `pnpm codegen` is a no-op (no schema change leaks to the frontend)
-  - [ ] Coverage on the new driver layer ≥ 85%
+  - [x] `BG_REMOVAL_BACKEND=birefnet` (or unset) yields identical output bytes to the pre-refactor pipeline on the 5 fixture objects from task 2.3 (regression: hash-compare the cached PNGs)
+  - [x] `BG_REMOVAL_BACKEND=bria` round-trips the same 5 fixtures and produces a valid alpha-channel PNG (mocked fal response in unit tests; one `@pytest.mark.live` integration test gated on `FAL_KEY`)
+  - [x] An invalid value for `BG_REMOVAL_BACKEND` fails startup with a clear pydantic-settings error
+  - [x] `architecture-keeper` agent passes — no fal SDK import outside `app/cloud/`
+  - [x] `pnpm codegen` is a no-op (no schema change leaks to the frontend)
+  - [x] Coverage on the new driver layer ≥ 85%
 
 ---
 

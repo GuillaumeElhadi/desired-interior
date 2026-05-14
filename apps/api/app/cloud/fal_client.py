@@ -107,7 +107,12 @@ class AsyncFalClient:
         total = 0
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as http:
             async with http.stream("GET", url) as resp:
-                resp.raise_for_status()
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise FalMalformedResponseError(
+                        f"fetch_bytes: CDN returned HTTP {exc.response.status_code} for {url!r}"
+                    ) from exc
                 async for chunk in resp.aiter_bytes():
                     total += len(chunk)
                     if total > self._MAX_FETCH_BYTES:
