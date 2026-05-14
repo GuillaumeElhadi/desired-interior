@@ -40,6 +40,7 @@ const RECORD: ObjectRecord = {
   masked_url: "https://cdn.fal.ai/masked.png",
   width: 256,
   height: 256,
+  object_type: "floor",
   created_at: 1_700_000_000,
 };
 
@@ -86,6 +87,7 @@ describe("saveObject", () => {
         RECORD.masked_url,
         RECORD.width,
         RECORD.height,
+        RECORD.object_type,
         RECORD.created_at,
       ]
     );

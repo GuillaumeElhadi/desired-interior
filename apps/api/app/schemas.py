@@ -54,6 +54,7 @@ class MaskResult(BaseModel):
     score: float = 0.0
     area: int = 0
     bbox: list[float] = []
+    surface_type: str = "unknown"
 
 
 class SceneMetadata(BaseModel):
@@ -80,6 +81,7 @@ class ExtractedObject(BaseModel):
     width: int
     height: int
     content_type: str = "image/png"
+    object_type: str = "floor"
 
 
 class ExtractResponse(BaseModel):

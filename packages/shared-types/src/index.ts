@@ -218,6 +218,11 @@ export interface components {
        * @default image/png
        */
       content_type: string;
+      /**
+       * Object Type
+       * @default floor
+       */
+      object_type: string;
     };
     /** HTTPValidationError */
     HTTPValidationError: {
@@ -282,6 +287,11 @@ export interface components {
        * @default []
        */
       bbox: number[];
+      /**
+       * Surface Type
+       * @default unknown
+       */
+      surface_type: string;
     };
     /** PlacementSpec */
     PlacementSpec: {
