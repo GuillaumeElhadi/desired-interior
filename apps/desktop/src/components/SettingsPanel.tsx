@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { updateSettings } from "../lib/api";
 import { loadSettings, saveSettings } from "../lib/settings";
+import * as telemetry from "../lib/telemetry";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -8,6 +9,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [falKey, setFalKey] = useState("");
+  const [analyticsEnabled, setAnalyticsEnabled] = useState<boolean>(false);
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -16,7 +18,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
   useEffect(() => {
     loadSettings()
-      .then(({ falKey: k }) => setFalKey(k))
+      .then(({ falKey: k, analyticsEnabled: a }) => {
+        setFalKey(k);
+        setAnalyticsEnabled(a ?? false);
+      })
       .catch(console.error);
   }, []);
 
@@ -39,8 +44,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     setSaveError(null);
     setSaved(false);
     try {
-      await saveSettings({ falKey });
+      const current = await loadSettings();
+      await saveSettings({ ...current, falKey, analyticsEnabled });
       await updateSettings({ fal_key: falKey });
+      telemetry.setEnabled(analyticsEnabled);
       setSaved(true);
     } catch (err: unknown) {
       setSaveError(String(err));
@@ -180,6 +187,35 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               Required for scene rendering. Get a key at{" "}
               <span className="font-medium text-gray-700">fal.ai</span>.
             </p>
+          </div>
+
+          {/* Analytics */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Anonymous analytics</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Share render counts and durations. No images or personal data.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={analyticsEnabled}
+                aria-label="Toggle anonymous analytics"
+                onClick={() => setAnalyticsEnabled((v) => !v)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 ${
+                  analyticsEnabled ? "bg-brand-accent" : "bg-gray-200"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
+                    analyticsEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Error / success feedback */}
