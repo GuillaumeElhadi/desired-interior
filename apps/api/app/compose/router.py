@@ -99,7 +99,10 @@ async def compose(
 
     cached = load_cached(cache_key)
     if cached is not None:
-        return ComposeResponse(**cached)
+        if "mask_url" in cached:
+            return ComposeResponse(**cached)
+        # Pre-task-5.3 cache entry is missing the new fields — discard and re-run
+        _log.info("compose_cache_stale", cache_key=cache_key)
 
     scene_content_type = "image/jpeg"
 
