@@ -37,6 +37,7 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 | `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)                                                                                            | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
 | `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only                                                                                          | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
 | `POST` | `/settings`          | Hot-reload runtime settings                                                                                                                                                  | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
+| `POST` | `/compose/harmonize` | Generative harmonisation pass — Flux Fill img2img + ControlNet Depth (primary) or SDXL img2img (fallback via `HARMONIZER_BACKEND=sdxl`). **Backend lands in task 5.4.**      | `HarmonizeRequest` (JSON)             | `HarmonizeResponse` (JSON)      |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -118,6 +119,35 @@ The `url` is a `data:` URL containing the composited JPEG inline — there is no
 ```
 
 Calling `POST /settings` with a `fal_key` rebuilds the fal.ai client immediately — no sidecar restart required. Pass an empty string `""` to clear the key (equivalent to unconfiguring it). Fields set to `null` are ignored (no-op). `fal_key` is validated to ≤ 200 characters.
+
+### `HarmonizeRequest` / `HarmonizeResponse` schema
+
+> **Status: forward declaration.** The frontend wrapper (`harmonize()` in `api.ts`) and these types exist as of task 5.2. The backend route (`POST /compose/harmonize`) and the Pydantic models are implemented in task 5.4. The `pnpm codegen` run in task 5.3 will move these types from the local `api.ts` declaration into `packages/shared-types`.
+
+```json
+// HarmonizeRequest
+{
+  "scene_id": "<SHA-256 returned by /scenes/preprocess>",
+  "object_ids": ["<SHA-256 returned by /objects/extract>"],
+  "harmonize_strength": 0.35,
+  "seed": 42
+}
+```
+
+- `harmonize_strength` — required, clamped to `[0.15, 0.55]` by the backend. No server-side default (see task 5.6 for the benchmarked recommended value). The UI slider in task 5.5 exposes this field.
+- `seed` — optional. When absent the backend picks a random seed; supply it to reproduce a result.
+- `object_ids` — list of all object SHA-256 hashes currently placed on the canvas (used to build the binary composition mask and the cache key).
+
+```json
+// HarmonizeResponse
+{
+  "url": "data:image/jpeg;base64,<base64-encoded harmonised JPEG>"
+}
+```
+
+The `url` is a `data:` URL containing the harmonised JPEG inline (same convention as `/compose`). The backend also returns the binary B/W mask and depth map URLs (see task 5.3), but the frontend only consumes `url` in task 5.2.
+
+**Latency budget**: p95 ≤ 25 s for 1024×1024 on Flux Fill (primary), ≤ 15 s on SDXL (fallback). Cache hit on identical inputs < 50 ms.
 
 ### Error response schema
 

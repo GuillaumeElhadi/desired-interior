@@ -9,6 +9,7 @@ import {
   compose,
   composePreview,
   getApiBaseUrl,
+  harmonize,
   postLog,
   preprocessScene,
 } from "../lib/api";
@@ -370,5 +371,109 @@ describe("preprocessScene", () => {
     const file = new File([], "room.jpg", { type: "image/jpeg" });
     await expect(preprocessScene(file)).rejects.toBeInstanceOf(ApiError);
     await expect(preprocessScene(file)).rejects.toMatchObject({ errorCode: "fal_error" });
+  });
+});
+
+describe("harmonize", () => {
+  const HARMONIZE_REQUEST = {
+    scene_id: "a".repeat(64),
+    object_ids: ["b".repeat(64)],
+    harmonize_strength: 0.35,
+  };
+
+  const HARMONIZE_RESPONSE = {
+    url: "data:image/jpeg;base64,/9j/4AAQ",
+  };
+
+  it("POSTs JSON to /compose/harmonize with auth header and returns parsed body", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(HARMONIZE_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await harmonize(HARMONIZE_REQUEST);
+
+    expect(result).toEqual(HARMONIZE_RESPONSE);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:9999/compose/harmonize",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(HARMONIZE_REQUEST),
+      })
+    );
+  });
+
+  it("threads AbortSignal through to fetch", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(HARMONIZE_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const ac = new AbortController();
+    await harmonize(HARMONIZE_REQUEST, ac.signal);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: ac.signal })
+    );
+  });
+
+  it("throws ApiError with fal_timeout on 504", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(504, "Gateway Timeout", {
+          error_code: "fal_timeout",
+          message: "timed out",
+          request_id: "r8",
+        })
+      )
+    );
+    await expect(harmonize(HARMONIZE_REQUEST)).rejects.toBeInstanceOf(ApiError);
+    await expect(harmonize(HARMONIZE_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_timeout",
+      httpStatus: 504,
+    });
+  });
+
+  it("throws ApiError with fal_rate_limited on 429", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(429, "Too Many Requests", {
+          error_code: "fal_rate_limited",
+          message: "slow down",
+          request_id: "r9",
+        })
+      )
+    );
+    await expect(harmonize(HARMONIZE_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_rate_limited",
+    });
+  });
+
+  it("throws ApiError with fal_error on malformed payload (502)", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(502, "Bad Gateway", {
+          error_code: "fal_error",
+          message: "fal.ai returned unexpected shape",
+          request_id: "r10",
+        })
+      )
+    );
+    await expect(harmonize(HARMONIZE_REQUEST)).rejects.toMatchObject({ errorCode: "fal_error" });
   });
 });

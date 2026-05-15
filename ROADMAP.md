@@ -479,13 +479,13 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.2 Render-mode toggle in the result view (UI track)
 
-- [ ] Branch: `feat/render-modes`
+- [x] Branch: `feat/render-modes`
 - The result view gains a two-state toggle: **Proxy** (current PIL composite, instant) and **Harmonize** (calls the new endpoint, ~10–25 s). Default stays on Proxy. The toggle is disabled while a harmonisation is in-flight, and the before/after slider compares Proxy vs Harmonize when both are available.
 - **Files:** `apps/desktop/src/components/ResultView.tsx`, `apps/desktop/src/lib/api.ts`, `apps/desktop/src/test/`.
 - **Acceptance:**
-  - [ ] Switching modes never causes the wrong image to flash (race condition guarded)
-  - [ ] Harmonize call can be cancelled and the toggle returns to Proxy
-  - [ ] States covered: idle, harmonising, success, failure (with retry CTA), offline
+  - [x] Switching modes never causes the wrong image to flash (race condition guarded)
+  - [x] Harmonize call can be cancelled and the toggle returns to Proxy
+  - [x] States covered: idle, harmonising, success, failure (with retry CTA), offline
 
 ### 5.3 Proxy export endpoint — composite + B/W mask (backend track)
 
