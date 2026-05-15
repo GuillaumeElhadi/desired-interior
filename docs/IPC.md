@@ -28,16 +28,16 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 
 ## HTTP endpoints
 
-| Method | Path                 | Description                                                                                                                                                                  | Request body                          | Response body / status          |
-| ------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------- |
-| `GET`  | `/health`            | Liveness probe. Response includes `{status, version, bg_removal_backend}` where `bg_removal_backend` ∈ `{"birefnet","bria"}` (diagnostic field, not in shared-types schema). | —                                     | `HealthResponse` (JSON)         |
-| `POST` | `/logs`              | Receive frontend logs                                                                                                                                                        | `LogRequest` (JSON)                   | `204 No Content`                |
-| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                                                                                                                   | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
-| `POST` | `/objects/extract`   | Object background removal                                                                                                                                                    | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
-| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)                                                                                            | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
-| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only                                                                                          | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
-| `POST` | `/settings`          | Hot-reload runtime settings                                                                                                                                                  | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
-| `POST` | `/compose/harmonize` | Generative harmonisation pass — Flux Fill img2img + ControlNet Depth (primary) or SDXL img2img (fallback via `HARMONIZER_BACKEND=sdxl`). **Backend lands in task 5.4.**      | `HarmonizeRequest` (JSON)             | `HarmonizeResponse` (JSON)      |
+| Method | Path                 | Description                                                                                                                                                                                                                                    | Request body                          | Response body / status          |
+| ------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------- |
+| `GET`  | `/health`            | Liveness probe. Response includes `{status, version, bg_removal_backend, harmonizer_backend}` where `bg_removal_backend` ∈ `{"birefnet","bria"}` and `harmonizer_backend` ∈ `{"flux","sdxl"}` (diagnostic fields, not in shared-types schema). | —                                     | `HealthResponse` (JSON)         |
+| `POST` | `/logs`              | Receive frontend logs                                                                                                                                                                                                                          | `LogRequest` (JSON)                   | `204 No Content`                |
+| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                                                                                                                                                                                     | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
+| `POST` | `/objects/extract`   | Object background removal                                                                                                                                                                                                                      | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
+| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)                                                                                                                                                              | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
+| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only                                                                                                                                                            | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
+| `POST` | `/settings`          | Hot-reload runtime settings                                                                                                                                                                                                                    | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
+| `POST` | `/compose/harmonize` | Generative harmonisation pass — Flux Fill img2img + ControlNet Depth (primary) or SDXL img2img (fallback via `HARMONIZER_BACKEND=sdxl`). **Backend lands in task 5.4.**                                                                        | `HarmonizeRequest` (JSON)             | `HarmonizeResponse` (JSON)      |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -130,32 +130,45 @@ Calling `POST /settings` with a `fal_key` rebuilds the fal.ai client immediately
 
 ### `HarmonizeRequest` / `HarmonizeResponse` schema
 
-> **Status: forward declaration.** The frontend wrapper (`harmonize()` in `api.ts`) and these types exist as of task 5.2. The backend route (`POST /compose/harmonize`) and the Pydantic models are implemented in task 5.4. The `pnpm codegen` run in task 5.3 will move these types from the local `api.ts` declaration into `packages/shared-types`.
-
 ```json
 // HarmonizeRequest
 {
   "scene_id": "<SHA-256 returned by /scenes/preprocess>",
-  "object_ids": ["<SHA-256 returned by /objects/extract>"],
+  "objects": [
+    {
+      "object_id": "<SHA-256 returned by /objects/extract>",
+      "placement": {
+        "bbox": { "x": 100.0, "y": 150.0, "width": 200.0, "height": 200.0 },
+        "depth_hint": 0.5,
+        "rotation": 0.0
+      }
+    }
+  ],
   "harmonize_strength": 0.35,
   "seed": 42
 }
 ```
 
-- `harmonize_strength` — required, clamped to `[0.15, 0.55]` by the backend. No server-side default (see task 5.6 for the benchmarked recommended value). The UI slider in task 5.5 exposes this field.
-- `seed` — optional. When absent the backend picks a random seed; supply it to reproduce a result.
-- `object_ids` — list of all object SHA-256 hashes currently placed on the canvas (used to build the binary composition mask and the cache key).
+- `objects` — list of 1–20 `ObjectPlacement` objects (same placement shape as `ComposeRequest`). The backend builds the proxy composite + union mask over all objects before calling Flux Fill.
+- `harmonize_strength` — required, validated to `[0.15, 0.55]`. No server-side default (see task 5.6 for the benchmarked recommended value per surface type). The UI slider in task 5.5 exposes this field.
+- `seed` — optional, validated to `[0, 2³²-1]`. Omit for a random seed; supply to reproduce a result.
 
 ```json
 // HarmonizeResponse
 {
-  "url": "data:image/jpeg;base64,<base64-encoded harmonised JPEG>"
+  "harmonize_id": "<SHA-256 cache key covering all inputs>",
+  "image": {
+    "url": "https://cdn.fal.ai/<harmonised image path>",
+    "content_type": "image/jpeg"
+  }
 }
 ```
 
-The `url` is a `data:` URL containing the harmonised JPEG inline (same convention as `/compose`). The backend also returns the binary B/W mask and depth map URLs (see task 5.3), but the frontend only consumes `url` in task 5.2.
+The `image.url` is an HTTPS CDN URL returned by fal.ai (validated against `*.fal.ai / *.fal.run / *.fal.media` — same allowlist as `ComposeResponse.depth_map_url`). Unlike `/compose`, the harmonized image is not returned as a `data:` URL.
 
-**Latency budget**: p95 ≤ 25 s for 1024×1024 on Flux Fill (primary), ≤ 15 s on SDXL (fallback). Cache hit on identical inputs < 50 ms.
+**Primary pipeline**: Flux Fill img2img at `fal-ai/flux-pro/v1/fill` with the PIL composite and union mask. **SDXL fallback**: `fal-ai/stable-diffusion-xl-inpainting`, engaged when `HARMONIZER_BACKEND=sdxl` (never the default). Both backends receive the same `strength` and optional `seed`. ControlNet Depth wiring and prompt tuning are finalised in task 5.6.
+
+**Latency budget**: p95 ≤ 25 s for 1024×1024 on Flux Fill (primary), ≤ 15 s on SDXL (fallback). Cache hit on identical inputs (scene + objects + placements + backend + strength + seed) < 50 ms.
 
 ### Error response schema
 

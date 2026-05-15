@@ -162,6 +162,7 @@ def health() -> JSONResponse:
             "status": "ok",
             "version": version,
             "bg_removal_backend": get_bg_driver().backend_name,
+            "harmonizer_backend": get_settings().harmonizer_backend,
         }
     )
 
