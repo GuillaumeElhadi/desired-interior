@@ -267,6 +267,9 @@ describe("PlacementCanvas — render flow", () => {
   const COMPOSE_RESPONSE = {
     composition_id: "c".repeat(64),
     image: { url: "https://cdn.fal.ai/result.jpg", content_type: "image/jpeg" },
+    composite_url: "https://cdn.fal.ai/result.jpg",
+    mask_url: "data:image/png;base64,mask",
+    depth_map_url: "https://cdn.fal.ai/depth.png",
   };
 
   async function renderWithPlacement() {

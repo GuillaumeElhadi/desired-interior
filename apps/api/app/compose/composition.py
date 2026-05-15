@@ -110,7 +110,17 @@ async def run_composition(
     # 8. Alpha-composite the object on top
     scene_with_shadow.paste(obj_final, (paste_x, paste_y), obj_final)
 
-    # 9. Encode as JPEG base64 data URL
+    # 9. Build binary B/W mask from the placed object's alpha footprint.
+    # Threshold alpha to strictly 0/255 — eliminates anti-aliasing leakage at
+    # rotated edges so the Harmonizer receives a clean inpainting mask.
+    mask_img = Image.new("L", (scene_w, scene_h), 0)
+    alpha_ch = obj_final.split()[3].point(lambda p: 255 if p > 0 else 0)
+    mask_img.paste(alpha_ch, (paste_x, paste_y))
+    mask_buf = io.BytesIO()
+    mask_img.save(mask_buf, format="PNG")
+    mask_url = f"data:image/png;base64,{base64.b64encode(mask_buf.getvalue()).decode()}"
+
+    # 10. Encode composite as JPEG base64 data URL
     buf = io.BytesIO()
     scene_with_shadow.convert("RGB").save(buf, format="JPEG", quality=92)
     data_url = f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
@@ -126,7 +136,7 @@ async def run_composition(
         paste_y=paste_y,
         surface_type=surface_type,
     )
-    return {"url": data_url, "content_type": "image/jpeg"}
+    return {"url": data_url, "content_type": "image/jpeg", "mask_url": mask_url}
 
 
 def _apply_shadow(

@@ -86,13 +86,21 @@ All endpoints accept and return `application/json`. New endpoints added in `apps
   "image": {
     "url": "data:image/jpeg;base64,<base64-encoded JPEG bytes>",
     "content_type": "image/jpeg"
-  }
+  },
+  "composite_url": "data:image/jpeg;base64,<base64-encoded JPEG bytes>",
+  "mask_url": "data:image/png;base64,<base64-encoded binary B/W PNG>",
+  "depth_map_url": "https://<fal.ai CDN host>/depth.png"
 }
 ```
 
-The `url` is a `data:` URL containing the composited JPEG inline — there is no longer an external CDN fetch. The frontend feeds it directly to `<img src>` or `Image.src`. See [ADR-0007](adr/0007-pil-compositing-over-flux-fill.md) for the rationale (faithful placement of the user's exact object).
+- **`image`** (back-compat) — nested object kept for consumers that predate task 5.3; `image.url` is identical to `composite_url`.
+- **`composite_url`** — canonical `data:image/jpeg;base64,…` data URL of the composited scene; fed to `<img src>`.
+- **`mask_url`** — `data:image/png;base64,…` data URL of a binary B/W mask the same resolution as the composite. White pixels mark the placed object's alpha footprint after rotation/scale; black is background. Strictly binary (0 or 255 only — no anti-aliasing). Used as the inpainting mask by the Harmonizer (task 5.4).
+- **`depth_map_url`** — HTTPS URL pointing to the scene's depth map on the fal.ai CDN (produced by `/scenes/preprocess`; passed through from cache). Host is constrained to `*.fal.ai`, `*.fal.run`, or `*.fal.media`. May be an empty string `""` if the scene was preprocessed before task 5.3 landed and the depth URL is unavailable.
 
-**Latency budget (final)**: < 500 ms p95 for 1024×1024 (local PIL composite + JPEG encode + one CDN download for the masked PNG). Cached compositions returned in < 50 ms. No fal.ai inference call is made by `/compose`.
+The `url` inside `image` is a `data:` URL — no external CDN fetch on the composite. See [ADR-0007](adr/0007-pil-compositing-over-flux-fill.md) for the rationale (faithful placement of the user's exact object).
+
+**Latency budget (final)**: < 500 ms p95 for 1024×1024 (local PIL composite + JPEG encode + mask PNG encode + one CDN download for the masked object PNG). Cached compositions returned in < 50 ms. No fal.ai inference call is made by `/compose`.
 
 ### `PreviewComposeResponse` schema
 

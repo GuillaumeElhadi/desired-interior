@@ -128,9 +128,31 @@ class ComposedImage(BaseModel):
     content_type: str = "image/jpeg"
 
 
+_FAL_CDN_HOSTS = (".fal.ai", ".fal.run", ".fal.media")
+
+
+def _validate_depth_map_url(v: str) -> str:
+    if not v:
+        return v
+    if not v.startswith("https://"):
+        raise ValueError("depth_map_url must be an HTTPS URL or empty string")
+    host = v.split("/")[2]
+    if not any(host.endswith(h) for h in _FAL_CDN_HOSTS):
+        raise ValueError(f"depth_map_url host {host!r} is not on the fal.ai CDN allowlist")
+    return v
+
+
 class ComposeResponse(BaseModel):
     composition_id: str
-    image: ComposedImage
+    image: ComposedImage  # back-compat: image.url is the JPEG data URL
+    composite_url: str  # canonical alias for the JPEG data URL
+    mask_url: str  # binary B/W PNG data URL (white = object pixels)
+    depth_map_url: str  # HTTPS CDN URL from scene preprocessing cache (*.fal.ai/run/media)
+
+    @field_validator("depth_map_url")
+    @classmethod
+    def validate_depth_map_url(cls, v: str) -> str:
+        return _validate_depth_map_url(v)
 
 
 class PreviewComposeResponse(BaseModel):
