@@ -14,6 +14,7 @@ import {
   savePlacement,
   updatePlacement,
 } from "../lib/db";
+import { duplicatePlacement } from "../lib/placements";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PREVIEW_DEBOUNCE_MS = 800;
@@ -142,6 +143,8 @@ export function PlacementCanvas({
   const trRef = useRef<Konva.Transformer>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const contextMenuItemRef = useRef<HTMLButtonElement>(null);
+  const handleDuplicateRef = useRef<(id: string) => Promise<void>>(async () => {});
   const previewAbortRef = useRef<AbortController | null>(null);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewGenRef = useRef(0);
@@ -154,6 +157,11 @@ export function PlacementCanvas({
     Map<string, { record: ObjectRecord; image: HTMLImageElement }>
   >(new Map());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    placementId: string;
+  } | null>(null);
   const [renderPhase, setRenderPhase] = useState<RenderPhase>("idle");
   const [renderError, setRenderError] = useState<RenderErrorInfo | null>(null);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("idle");
@@ -264,6 +272,13 @@ export function PlacementCanvas({
 
       if (e.key === "Escape") {
         setSelectedId(null);
+        setContextMenu(null);
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        void handleDuplicateRef.current(selectedId);
         return;
       }
 
@@ -463,6 +478,41 @@ export function PlacementCanvas({
   const handleCancelRender = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  const handleDuplicate = useCallback(
+    async (placementId: string) => {
+      const source = placements.find((p) => p.id === placementId);
+      if (!source) return;
+      const dup = duplicatePlacement(source);
+      await savePlacement(dup);
+      setPlacements((prev) => [...prev, dup]);
+      setSelectedId(dup.id);
+      setContextMenu(null);
+    },
+    [placements]
+  );
+
+  // Keep ref in sync so the keyboard handler always calls the latest version
+  // without adding handleDuplicate to the keyboard effect's dep array.
+  useEffect(() => {
+    handleDuplicateRef.current = handleDuplicate;
+  }, [handleDuplicate]);
+
+  // Move focus into the context menu's first item when it opens (ARIA APG).
+  useEffect(() => {
+    if (contextMenu) contextMenuItemRef.current?.focus();
+  }, [contextMenu]);
+
+  // Dismiss context menu when the user clicks outside it.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: PointerEvent) => {
+      const menu = contextMenuItemRef.current?.closest('[role="menu"]');
+      if (menu && !menu.contains(e.target as Node)) setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [contextMenu]);
 
   const computeAutoPlacement = useCallback(
     (
@@ -669,6 +719,7 @@ export function PlacementCanvas({
             if (pos) void handleClickPlace(pos.x, pos.y);
           } else if (isBackground) {
             setSelectedId(null);
+            setContextMenu(null);
           }
         }}
       >
@@ -699,7 +750,28 @@ export function PlacementCanvas({
                 draggable
                 onClick={() => {
                   setSelectedId(p.id);
+                  setContextMenu(null);
                   containerRef.current?.focus();
+                }}
+                onContextMenu={(e) => {
+                  e.evt.preventDefault();
+                  setSelectedId(p.id);
+                  containerRef.current?.focus();
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  const x = e.evt.clientX - (rect?.left ?? 0);
+                  const y = e.evt.clientY - (rect?.top ?? 0);
+                  // Clamp so the menu stays inside the canvas (overflow-hidden clips it otherwise).
+                  const MENU_W = 132;
+                  const MENU_H = 44;
+                  const safeX = Math.min(
+                    x,
+                    (containerRef.current?.clientWidth ?? 9999) - MENU_W - 4
+                  );
+                  const safeY = Math.min(
+                    y,
+                    (containerRef.current?.clientHeight ?? 9999) - MENU_H - 4
+                  );
+                  setContextMenu({ x: safeX, y: safeY, placementId: p.id });
                 }}
                 onDragEnd={handleDragEnd(p.id)}
                 onTransformEnd={handleTransformEnd(p.id)}
@@ -791,6 +863,92 @@ export function PlacementCanvas({
             </div>
           );
         })()}
+
+      {/* Floating selection toolbar — appears above the selected object */}
+      {selectedId &&
+        (() => {
+          const p = placements.find((pl) => pl.id === selectedId);
+          if (!p) return null;
+          const entry = objectsMap.get(p.object_id);
+          const naturalWidth = entry?.image.naturalWidth ?? 0;
+          const centerX = p.x + (naturalWidth * p.scale_x) / 2;
+          // 74 px clears Konva's rotation handle (≈32 px above bbox) + scale handles.
+          // X center is unrotated; rotation drift is a known v1 limitation.
+          const toolbarY = Math.max(8, p.y - 74);
+          return (
+            <div
+              className="absolute z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-black/75 px-1.5 py-1 backdrop-blur-sm"
+              style={{ left: centerX, top: toolbarY }}
+            >
+              <button
+                type="button"
+                aria-label="Duplicate object"
+                title="Duplicate (⌘D)"
+                onClick={() => void handleDuplicate(selectedId)}
+                className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth={2} />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+                  />
+                </svg>
+                Duplicate
+              </button>
+            </div>
+          );
+        })()}
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          className="absolute z-30 min-w-32 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          aria-label="Object actions"
+          onKeyDown={(e) => {
+            if (e.key === "Tab" || e.key === "Escape") {
+              e.stopPropagation();
+              setContextMenu(null);
+            }
+          }}
+        >
+          <button
+            ref={contextMenuItemRef}
+            type="button"
+            role="menuitem"
+            onClick={() => void handleDuplicate(contextMenu.placementId)}
+            className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-accent"
+          >
+            <svg
+              aria-hidden="true"
+              className="h-3.5 w-3.5 flex-shrink-0 text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth={2} />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+              />
+            </svg>
+            Duplicate
+            <span className="ml-auto pl-3 text-[11px] text-gray-400">⌘D</span>
+          </button>
+        </div>
+      )}
 
       {/* Render button — bottom-right, hidden when an object is selected (avoids conflict
           with the Konva Transformer handles and the depth slider) */}
