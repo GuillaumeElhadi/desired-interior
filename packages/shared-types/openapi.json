@@ -475,10 +475,22 @@
           },
           "image": {
             "$ref": "#/components/schemas/ComposedImage"
+          },
+          "composite_url": {
+            "type": "string",
+            "title": "Composite Url"
+          },
+          "mask_url": {
+            "type": "string",
+            "title": "Mask Url"
+          },
+          "depth_map_url": {
+            "type": "string",
+            "title": "Depth Map Url"
           }
         },
         "type": "object",
-        "required": ["composition_id", "image"],
+        "required": ["composition_id", "image", "composite_url", "mask_url", "depth_map_url"],
         "title": "ComposeResponse"
       },
       "ComposedImage": {

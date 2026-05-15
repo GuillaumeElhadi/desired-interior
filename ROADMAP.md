@@ -489,17 +489,17 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.3 Proxy export endpoint — composite + B/W mask (backend track)
 
-- [ ] Branch: `feat/proxy-export`
+- [x] Branch: `feat/proxy-export`
 - Extend `/compose` (or add `/compose/proxy`) to return both:
   - the existing composited JPEG (`url`, base64 data URL),
   - a **binary B/W mask** (`mask_url`, PNG data URL) where white pixels mark the union of all placed objects' alpha footprints (after rotation/scale), black is background.
     Also returns `depth_map_url` (proxied from the cached scene preprocessing) so the Harmonizer can feed a ControlNet without re-running Depth Anything. Update `packages/shared-types` via `pnpm codegen`.
 - **Files:** `apps/api/app/compose/composition.py`, `apps/api/app/compose/router.py`, `apps/api/app/schemas.py`, `packages/shared-types/`, pytest fixtures.
 - **Acceptance:**
-  - [ ] Response contains `composite_url`, `mask_url`, `depth_map_url` and the existing `url` alias for back-compat
-  - [ ] Mask is strictly binary (only 0 and 255), same resolution as the composite
-  - [ ] Mask round-trips through PIL + numpy in tests with no anti-aliasing leakage
-  - [ ] No fal.ai inference call added (mask is computed locally; depth map is fetched from cache)
+  - [x] Response contains `composite_url`, `mask_url`, `depth_map_url` and the existing `url` alias for back-compat
+  - [x] Mask is strictly binary (only 0 and 255), same resolution as the composite
+  - [x] Mask round-trips through PIL + numpy in tests with no anti-aliasing leakage
+  - [x] No fal.ai inference call added (mask is computed locally; depth map is fetched from cache)
 
 ### 5.4 Harmonizer endpoint — Flux Fill img2img + ControlNet Depth (backend track)
 

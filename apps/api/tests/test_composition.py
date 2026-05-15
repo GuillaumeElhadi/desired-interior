@@ -149,6 +149,9 @@ def test_compose_cache_save_and_hit(tmp_compose_cache: Path) -> None:
     data = {
         "composition_id": "xyz",
         "image": {"url": "data:image/jpeg;base64,abc", "content_type": "image/jpeg"},
+        "composite_url": "data:image/jpeg;base64,abc",
+        "mask_url": "data:image/png;base64,def",
+        "depth_map_url": "https://cdn.fal.ai/depth.png",
     }
     compose_cache_module.save_cached("xyz", data)
     assert compose_cache_module.load_cached("xyz") == data
@@ -231,6 +234,49 @@ def test_placement_spec_rotation_defaults_to_zero() -> None:
 
 
 # ---------------------------------------------------------------------------
+# ComposeResponse depth_map_url validator
+# ---------------------------------------------------------------------------
+
+
+def _base_response(depth_map_url: str) -> dict:
+    return {
+        "composition_id": "a" * 64,
+        "image": {"url": "data:image/jpeg;base64,abc", "content_type": "image/jpeg"},
+        "composite_url": "data:image/jpeg;base64,abc",
+        "mask_url": "data:image/png;base64,def",
+        "depth_map_url": depth_map_url,
+    }
+
+
+def test_compose_response_accepts_empty_depth_map_url() -> None:
+    from app.schemas import ComposeResponse
+
+    r = ComposeResponse(**_base_response(""))
+    assert r.depth_map_url == ""
+
+
+def test_compose_response_accepts_valid_fal_cdn_url() -> None:
+    from app.schemas import ComposeResponse
+
+    r = ComposeResponse(**_base_response("https://cdn.fal.ai/depth.png"))
+    assert r.depth_map_url == "https://cdn.fal.ai/depth.png"
+
+
+def test_compose_response_rejects_non_fal_depth_map_url() -> None:
+    from app.schemas import ComposeResponse
+
+    with pytest.raises(Exception, match="allowlist"):
+        ComposeResponse(**_base_response("https://evil.example.com/depth.png"))
+
+
+def test_compose_response_rejects_http_depth_map_url() -> None:
+    from app.schemas import ComposeResponse
+
+    with pytest.raises(Exception, match="HTTPS"):
+        ComposeResponse(**_base_response("http://cdn.fal.ai/depth.png"))
+
+
+# ---------------------------------------------------------------------------
 # Router integration tests (offline)
 # ---------------------------------------------------------------------------
 
@@ -252,6 +298,9 @@ async def test_compose_returns_data_url(
     data = resp.json()
     assert data["image"]["url"].startswith("data:image/jpeg;base64,")
     assert data["image"]["content_type"] == "image/jpeg"
+    assert data["composite_url"].startswith("data:image/jpeg;base64,")
+    assert data["mask_url"].startswith("data:image/png;base64,")
+    assert data["depth_map_url"] == "https://cdn.fal.ai/depth.png"
     assert mock_fal.await_count == 1
 
 
@@ -278,6 +327,59 @@ async def test_compose_result_is_valid_jpeg(
 
 
 @pytest.mark.asyncio
+async def test_compose_mask_is_strictly_binary(
+    tmp_compose_cache: Path,
+    tmp_scene_cache: Path,
+    tmp_obj_cache: Path,
+    mock_fal: AsyncMock,
+) -> None:
+    scene_image = _make_jpeg(256, 256)
+    _seed_caches(tmp_scene_cache, tmp_obj_cache, scene_image)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        resp = await c.post("/compose", json=_VALID_BODY)
+
+    assert resp.status_code == 200
+    data = resp.json()
+
+    # Decode mask and composite
+    mask_b64 = data["mask_url"].split(",", 1)[1]
+    mask_img = Image.open(io.BytesIO(base64.b64decode(mask_b64)))
+    composite_b64 = data["composite_url"].split(",", 1)[1]
+    composite_img = Image.open(io.BytesIO(base64.b64decode(composite_b64)))
+
+    # Mask must be same resolution as the composite
+    assert mask_img.size == composite_img.size
+
+    # Mask pixels must be strictly binary (no anti-aliasing leakage).
+    # PIL histogram returns 256 bucket counts; only bins 0 and 255 may be non-zero.
+    mask_l = mask_img.convert("L")
+    hist = mask_l.histogram()
+    non_binary = sum(count for i, count in enumerate(hist) if count > 0 and i not in (0, 255))
+    assert non_binary == 0, f"Non-binary pixels found in mask (count: {non_binary})"
+
+    # At least some white pixels (the object footprint) must exist
+    assert hist[255] > 0, "Mask has no white pixels — object not composited"
+
+
+@pytest.mark.asyncio
+async def test_compose_depth_map_url_passthrough(
+    tmp_compose_cache: Path,
+    tmp_scene_cache: Path,
+    tmp_obj_cache: Path,
+    mock_fal: AsyncMock,
+) -> None:
+    scene_image = _make_jpeg()
+    _seed_caches(tmp_scene_cache, tmp_obj_cache, scene_image)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        resp = await c.post("/compose", json=_VALID_BODY)
+
+    assert resp.status_code == 200
+    assert resp.json()["depth_map_url"] == "https://cdn.fal.ai/depth.png"
+
+
+@pytest.mark.asyncio
 async def test_compose_cache_hit_skips_fetch(
     tmp_compose_cache: Path,
     tmp_scene_cache: Path,
@@ -295,6 +397,9 @@ async def test_compose_cache_hit_skips_fetch(
         {
             "composition_id": cache_key,
             "image": {"url": "data:image/jpeg;base64,cached", "content_type": "image/jpeg"},
+            "composite_url": "data:image/jpeg;base64,cached",
+            "mask_url": "data:image/png;base64,cached_mask",
+            "depth_map_url": "https://cdn.fal.ai/depth.png",
         },
     )
 

@@ -179,6 +179,12 @@ export interface components {
       /** Composition Id */
       composition_id: string;
       image: components["schemas"]["ComposedImage"];
+      /** Composite Url */
+      composite_url: string;
+      /** Mask Url */
+      mask_url: string;
+      /** Depth Map Url */
+      depth_map_url: string;
     };
     /** ComposedImage */
     ComposedImage: {

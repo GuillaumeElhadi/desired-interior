@@ -75,6 +75,7 @@ async def compose(
     masked = object_data.get("masked") or {}
     object_url: str = masked.get("url", "")
     surface_type: str = masked.get("object_type", "floor")
+    depth_map_url: str = (scene_data.get("depth_map") or {}).get("url", "")
     cache_key = make_cache_key(
         body.scene_id, body.object_id, body.placement, body.style_hints, surface_type
     )
@@ -108,6 +109,9 @@ async def compose(
     response = ComposeResponse(
         composition_id=cache_key,
         image=ComposedImage(url=result["url"], content_type=result["content_type"]),
+        composite_url=result["url"],
+        mask_url=result["mask_url"],
+        depth_map_url=depth_map_url,
     )
     save_cached(cache_key, response.model_dump())
     return response
