@@ -72,6 +72,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/compose/harmonize": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Harmonize */
+    post: operations["harmonize_compose_harmonize_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/settings": {
     parameters: {
       query?: never;
@@ -235,6 +252,23 @@ export interface components {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
     };
+    /** HarmonizeRequest */
+    HarmonizeRequest: {
+      /** Scene Id */
+      scene_id: string;
+      /** Objects */
+      objects: components["schemas"]["ObjectPlacement"][];
+      /** Harmonize Strength */
+      harmonize_strength: number;
+      /** Seed */
+      seed?: number | null;
+    };
+    /** HarmonizeResponse */
+    HarmonizeResponse: {
+      /** Harmonize Id */
+      harmonize_id: string;
+      image: components["schemas"]["ComposedImage"];
+    };
     /** HealthResponse */
     HealthResponse: {
       /** Status */
@@ -298,6 +332,12 @@ export interface components {
        * @default unknown
        */
       surface_type: string;
+    };
+    /** ObjectPlacement */
+    ObjectPlacement: {
+      /** Object Id */
+      object_id: string;
+      placement: components["schemas"]["PlacementSpec"];
     };
     /** PlacementSpec */
     PlacementSpec: {
@@ -506,6 +546,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PreviewComposeResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  harmonize_compose_harmonize_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["HarmonizeRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HarmonizeResponse"];
         };
       };
       /** @description Validation Error */

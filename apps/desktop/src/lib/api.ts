@@ -175,22 +175,9 @@ export async function composePreview(
 }
 
 // ---------------------------------------------------------------------------
-// Harmonize types — forward declaration until task 5.3 generates them via
-// pnpm codegen. The shared-types package will own these in task 5.3/5.4.
-// ---------------------------------------------------------------------------
-
-export interface HarmonizeRequest {
-  scene_id: string;
-  object_ids: string[];
-  /** Must be in [0.15, 0.55] — required, no server-side default (see task 5.6). */
-  harmonize_strength: number;
-  seed?: number;
-}
-
-export interface HarmonizeResponse {
-  /** Harmonised image as a JPEG data URL or CDN URL. */
-  url: string;
-}
+export type ObjectPlacement = components["schemas"]["ObjectPlacement"];
+export type HarmonizeRequest = components["schemas"]["HarmonizeRequest"];
+export type HarmonizeResponse = components["schemas"]["HarmonizeResponse"];
 
 export async function harmonize(
   request: HarmonizeRequest,

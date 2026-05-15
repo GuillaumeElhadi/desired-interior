@@ -377,12 +377,22 @@ describe("preprocessScene", () => {
 describe("harmonize", () => {
   const HARMONIZE_REQUEST = {
     scene_id: "a".repeat(64),
-    object_ids: ["b".repeat(64)],
+    objects: [
+      {
+        object_id: "b".repeat(64),
+        placement: {
+          bbox: { x: 50, y: 80, width: 100, height: 100 },
+          depth_hint: 0.4,
+          rotation: 0,
+        },
+      },
+    ],
     harmonize_strength: 0.35,
   };
 
   const HARMONIZE_RESPONSE = {
-    url: "data:image/jpeg;base64,/9j/4AAQ",
+    harmonize_id: "c".repeat(64),
+    image: { url: "https://cdn.fal.ai/harmonized.jpg", content_type: "image/jpeg" },
   };
 
   it("POSTs JSON to /compose/harmonize with auth header and returns parsed body", async () => {
