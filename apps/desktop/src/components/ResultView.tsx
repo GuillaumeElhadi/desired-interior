@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toUserMessage, type UserMessage } from "../lib/errors";
 
 type HarmonizePhase =
@@ -38,6 +38,14 @@ export function ResultView({
   // from a previously-started harmonise call landing after it was cancelled.
   const genRef = useRef(0);
 
+  // Focus management refs
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const failureCTARef = useRef<HTMLDivElement>(null);
+  // Control bar is made inert while an overlay is active so keyboard focus
+  // cannot escape to Re-render while Cancel / Retry / Back are the only
+  // valid actions.
+  const controlBarRef = useRef<HTMLDivElement>(null);
+
   const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
   const updateFromPointer = (e: React.PointerEvent) => {
@@ -60,6 +68,20 @@ export function ResultView({
     onHarmonize(controller.signal).then(
       (url) => {
         if (genRef.current !== gen) return; // stale response — discard
+        // Reject URLs that are not safe image sources to prevent XSS via a
+        // crafted fal.ai response landing in <img src>. CSP is currently null
+        // in tauri.conf.json so this is the sole defence for this class.
+        if (!url.startsWith("https://") && !url.startsWith("data:image/")) {
+          setHarmonizePhase({
+            type: "failure",
+            message: {
+              title: "Invalid response",
+              detail: "The service returned an unexpected result. Please try again.",
+              cta: "retry",
+            },
+          });
+          return;
+        }
         setHarmonizePhase({ type: "success", url });
       },
       (err: unknown) => {
@@ -103,17 +125,40 @@ export function ResultView({
     ? (harmonizePhase as { type: "success"; url: string }).url
     : resultUrl;
   const beforeLabel = showHarmonizeCompare ? "Proxy" : "Before";
-  const afterLabel = showHarmonizeCompare ? "Harmonized" : "After";
+  const afterLabel = showHarmonizeCompare ? "Harmonised" : "After";
 
   const overlayActive = isLoading || isFailure;
+
+  // Move keyboard focus into the active overlay so keyboard users can reach
+  // Cancel / Retry / Back to Proxy without tabbing through inert controls.
+  useEffect(() => {
+    if (isLoading) cancelButtonRef.current?.focus();
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (isFailure) {
+      failureCTARef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+  }, [isFailure]);
+
+  // Prevent keyboard focus from escaping to the control bar while an overlay
+  // is covering it.
+  useEffect(() => {
+    const el = controlBarRef.current;
+    if (!el) return;
+    if (overlayActive) {
+      el.setAttribute("inert", "");
+    } else {
+      el.removeAttribute("inert");
+    }
+  }, [overlayActive]);
 
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 select-none overflow-hidden bg-gray-900"
+      className={`relative flex-1 select-none overflow-hidden bg-gray-900 ${overlayActive ? "cursor-default" : "cursor-ew-resize"}`}
       role="region"
       aria-label="Render result"
-      style={{ cursor: overlayActive ? "default" : "ew-resize" }}
       onPointerDown={(e) => {
         if ((e.target as HTMLElement).closest("button")) return;
         if (overlayActive) return;
@@ -187,7 +232,7 @@ export function ResultView({
           value={position}
           onChange={(e) => setPosition(Number(e.target.value))}
           className="sr-only"
-          aria-label="Before/after position"
+          aria-label={`${beforeLabel} / ${afterLabel} comparison position`}
         />
       )}
 
@@ -208,11 +253,10 @@ export function ResultView({
         <div
           className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60"
           role="status"
-          aria-live="polite"
           aria-label="Harmonising"
         >
           <svg
-            className="h-8 w-8 animate-spin text-white"
+            className="h-8 w-8 motion-safe:animate-spin text-white"
             viewBox="0 0 24 24"
             fill="none"
             aria-hidden="true"
@@ -233,6 +277,7 @@ export function ResultView({
           </svg>
           <p className="text-sm text-white/90">Harmonising…</p>
           <button
+            ref={cancelButtonRef}
             type="button"
             onClick={() => handleModeSelect("proxy")}
             className="rounded-lg bg-white/20 px-3 py-1.5 text-sm text-white hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -252,7 +297,7 @@ export function ResultView({
           <p className="max-w-xs text-center text-xs text-white/70">
             {harmonizePhase.message.detail}
           </p>
-          <div className="flex gap-2">
+          <div ref={failureCTARef} className="flex gap-2">
             {harmonizePhase.message.cta === "retry" && (
               <button
                 type="button"
@@ -273,20 +318,24 @@ export function ResultView({
         </div>
       )}
 
-      {/* Controls */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-lg bg-black/75 px-4 py-2 backdrop-blur-sm">
+      {/* Controls — marked inert while an overlay is active so keyboard focus
+          cannot reach Re-render while Cancel/Retry/Back are the only valid actions */}
+      <div
+        ref={controlBarRef}
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-lg bg-black/75 px-4 py-2 backdrop-blur-sm"
+      >
         <button
           type="button"
           onClick={onBack}
           aria-label="Back to edit"
-          className="rounded text-sm text-white hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/75"
+          className="rounded-md text-sm text-white hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/75"
         >
-          ← Edit
+          <span aria-hidden="true">←</span> <span>Edit</span>
         </button>
 
         {/* Render mode toggle */}
         <div
-          role="group"
+          role="radiogroup"
           aria-label="Render mode"
           className="flex items-center rounded-md bg-white/10 p-0.5"
         >
@@ -296,7 +345,7 @@ export function ResultView({
             aria-checked={mode === "proxy"}
             onClick={() => handleModeSelect("proxy")}
             disabled={isLoading}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50 ${
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
               mode === "proxy" ? "bg-white text-gray-900" : "text-white/80 hover:text-white"
             }`}
           >
@@ -308,14 +357,21 @@ export function ResultView({
             aria-checked={mode === "harmonize"}
             onClick={() => handleModeSelect("harmonize")}
             disabled={isLoading || !onHarmonize}
-            title={!onHarmonize ? "Harmonize will be available in a future update" : undefined}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
+            aria-describedby={!onHarmonize ? "harmonize-unavailable-hint" : undefined}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
               mode === "harmonize" ? "bg-white text-gray-900" : "text-white/80 hover:text-white"
             }`}
           >
             Harmonize
           </button>
         </div>
+
+        {/* Visually hidden description for the disabled Harmonize button */}
+        {!onHarmonize && (
+          <span id="harmonize-unavailable-hint" className="sr-only">
+            Harmonize will be available in a future update
+          </span>
+        )}
 
         <button
           type="button"

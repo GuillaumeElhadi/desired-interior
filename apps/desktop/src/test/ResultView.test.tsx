@@ -51,13 +51,13 @@ describe("ResultView — proxy mode (default)", () => {
 
   it("slider starts at 50", () => {
     render(<ResultView {...BASE_PROPS} />);
-    const slider = screen.getByRole("slider", { name: /before\/after position/i });
+    const slider = screen.getByRole("slider", { name: /before.*after.*position/i });
     expect(slider).toHaveValue("50");
   });
 
   it("slider onChange updates position", () => {
     render(<ResultView {...BASE_PROPS} />);
-    const slider = screen.getByRole("slider", { name: /before\/after position/i });
+    const slider = screen.getByRole("slider", { name: /before.*after.*position/i });
     fireEvent.change(slider, { target: { value: "75" } });
     expect(slider).toHaveValue("75");
   });
@@ -84,7 +84,7 @@ describe("ResultView — proxy mode (default)", () => {
 describe("ResultView — render mode toggle", () => {
   it("renders Proxy and Harmonize buttons in a group", () => {
     render(<ResultView {...BASE_PROPS} />);
-    const group = screen.getByRole("group", { name: /render mode/i });
+    const group = screen.getByRole("radiogroup", { name: /render mode/i });
     expect(group).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /^proxy$/i })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /^harmonize$/i })).toBeInTheDocument();
@@ -208,7 +208,7 @@ describe("ResultView — cancel", () => {
 
     // Resolve the stale promise after cancel
     await act(async () => {
-      resolve("blob:harmonized-stale");
+      resolve("data:image/jpeg;base64,stale");
     });
 
     // Should still be in proxy mode with no harmonised image
@@ -223,18 +223,26 @@ describe("ResultView — cancel", () => {
 
 describe("ResultView — harmonise success", () => {
   it("shows harmonised image as After when successful", async () => {
-    const onHarmonize = vi.fn(() => Promise.resolve("blob:harmonized"));
+    const onHarmonize = vi.fn(() => Promise.resolve("data:image/jpeg;base64,harmonized"));
     render(<ResultView {...BASE_PROPS} onHarmonize={onHarmonize} />);
 
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
 
     await waitFor(() =>
-      expect(screen.getByAltText("After")).toHaveAttribute("src", "blob:harmonized")
+      expect(screen.getByAltText("After")).toHaveAttribute(
+        "src",
+        "data:image/jpeg;base64,harmonized"
+      )
     );
   });
 
   it("shows proxy as Before when in harmonise compare mode", async () => {
-    render(<ResultView {...BASE_PROPS} onHarmonize={() => Promise.resolve("blob:harmonized")} />);
+    render(
+      <ResultView
+        {...BASE_PROPS}
+        onHarmonize={() => Promise.resolve("data:image/jpeg;base64,harmonized")}
+      />
+    );
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
 
     await waitFor(() =>
@@ -242,18 +250,28 @@ describe("ResultView — harmonise success", () => {
     );
   });
 
-  it("labels change to Proxy / Harmonized when comparing", async () => {
-    render(<ResultView {...BASE_PROPS} onHarmonize={() => Promise.resolve("blob:harmonized")} />);
+  it("labels change to Proxy / Harmonised when comparing", async () => {
+    render(
+      <ResultView
+        {...BASE_PROPS}
+        onHarmonize={() => Promise.resolve("data:image/jpeg;base64,harmonized")}
+      />
+    );
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
 
     await waitFor(() => expect(screen.getByText("Proxy")).toBeInTheDocument());
-    expect(screen.getByText("Harmonized")).toBeInTheDocument();
+    expect(screen.getByText("Harmonised")).toBeInTheDocument();
   });
 
   it("switching back to Proxy restores originalUrl as Before", async () => {
-    render(<ResultView {...BASE_PROPS} onHarmonize={() => Promise.resolve("blob:harmonized")} />);
+    render(
+      <ResultView
+        {...BASE_PROPS}
+        onHarmonize={() => Promise.resolve("data:image/jpeg;base64,harmonized")}
+      />
+    );
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
-    await waitFor(() => expect(screen.getByText("Harmonized")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Harmonised")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("radio", { name: /^proxy$/i }));
 
@@ -262,10 +280,10 @@ describe("ResultView — harmonise success", () => {
   });
 
   it("clicking Harmonize again when already successful does not re-call onHarmonize", async () => {
-    const onHarmonize = vi.fn(() => Promise.resolve("blob:harmonized"));
+    const onHarmonize = vi.fn(() => Promise.resolve("data:image/jpeg;base64,harmonized"));
     render(<ResultView {...BASE_PROPS} onHarmonize={onHarmonize} />);
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
-    await waitFor(() => expect(screen.getByText("Harmonized")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Harmonised")).toBeInTheDocument());
 
     // Switch to proxy, then back to harmonize
     fireEvent.click(screen.getByRole("radio", { name: /^proxy$/i }));
@@ -306,11 +324,11 @@ describe("ResultView — harmonise failure", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument());
 
     // Wire the second call to succeed
-    onHarmonize.mockResolvedValueOnce("blob:harmonized-retry");
+    onHarmonize.mockResolvedValueOnce("data:image/jpeg;base64,retry");
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
 
     await waitFor(() =>
-      expect(screen.getByAltText("After")).toHaveAttribute("src", "blob:harmonized-retry")
+      expect(screen.getByAltText("After")).toHaveAttribute("src", "data:image/jpeg;base64,retry")
     );
   });
 
@@ -383,7 +401,7 @@ describe("ResultView — race condition guard", () => {
 
     // Resolve the stale first promise — should be ignored
     await act(async () => {
-      d1.resolve("blob:stale-url");
+      d1.resolve("data:image/jpeg;base64,stale-url");
     });
 
     // State should still be loading (not success with stale url)
@@ -392,11 +410,14 @@ describe("ResultView — race condition guard", () => {
 
     // Resolve the valid second promise
     await act(async () => {
-      d2.resolve("blob:final-url");
+      d2.resolve("data:image/jpeg;base64,final-url");
     });
 
     await waitFor(() =>
-      expect(screen.getByAltText("After")).toHaveAttribute("src", "blob:final-url")
+      expect(screen.getByAltText("After")).toHaveAttribute(
+        "src",
+        "data:image/jpeg;base64,final-url"
+      )
     );
   });
 });
