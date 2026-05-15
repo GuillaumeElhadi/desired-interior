@@ -174,6 +174,38 @@ export async function composePreview(
   return response.json() as Promise<PreviewComposeResponse>;
 }
 
+// ---------------------------------------------------------------------------
+// Harmonize types — forward declaration until task 5.3 generates them via
+// pnpm codegen. The shared-types package will own these in task 5.3/5.4.
+// ---------------------------------------------------------------------------
+
+export interface HarmonizeRequest {
+  scene_id: string;
+  object_ids: string[];
+  /** Must be in [0.15, 0.55] — required, no server-side default (see task 5.6). */
+  harmonize_strength: number;
+  seed?: number;
+}
+
+export interface HarmonizeResponse {
+  /** Harmonised image as a JPEG data URL or CDN URL. */
+  url: string;
+}
+
+export async function harmonize(
+  request: HarmonizeRequest,
+  signal?: AbortSignal
+): Promise<HarmonizeResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const response = await safeFetch(`${baseUrl}/compose/harmonize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  return response.json() as Promise<HarmonizeResponse>;
+}
+
 export async function updateSettings(body: { fal_key?: string }): Promise<void> {
   const baseUrl = await getApiBaseUrl();
   await safeFetch(`${baseUrl}/settings`, {
