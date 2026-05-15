@@ -233,6 +233,63 @@
         }
       }
     },
+    "/compose/harmonize": {
+      "post": {
+        "tags": ["compose"],
+        "summary": "Harmonize",
+        "operationId": "harmonize_compose_harmonize_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HarmonizeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HarmonizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/settings": {
       "post": {
         "tags": ["settings"],
@@ -584,6 +641,59 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HarmonizeRequest": {
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "title": "Scene Id"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/ObjectPlacement"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Objects"
+          },
+          "harmonize_strength": {
+            "type": "number",
+            "maximum": 0.55,
+            "minimum": 0.15,
+            "title": "Harmonize Strength"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 4294967295.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "type": "object",
+        "required": ["scene_id", "objects", "harmonize_strength"],
+        "title": "HarmonizeRequest"
+      },
+      "HarmonizeResponse": {
+        "properties": {
+          "harmonize_id": {
+            "type": "string",
+            "title": "Harmonize Id"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ComposedImage"
+          }
+        },
+        "type": "object",
+        "required": ["harmonize_id", "image"],
+        "title": "HarmonizeResponse"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -684,6 +794,20 @@
         "type": "object",
         "required": ["url"],
         "title": "MaskResult"
+      },
+      "ObjectPlacement": {
+        "properties": {
+          "object_id": {
+            "type": "string",
+            "title": "Object Id"
+          },
+          "placement": {
+            "$ref": "#/components/schemas/PlacementSpec"
+          }
+        },
+        "type": "object",
+        "required": ["object_id", "placement"],
+        "title": "ObjectPlacement"
       },
       "PlacementSpec": {
         "properties": {

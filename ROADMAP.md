@@ -503,7 +503,7 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.4 Harmonizer endpoint — Flux Fill img2img + ControlNet Depth (backend track)
 
-- [ ] Branch: `feat/harmonizer-endpoint`
+- [x] Branch: `feat/harmonizer-endpoint`
 - New endpoint `POST /compose/harmonize`. **Primary pipeline (High Fidelity, default): Flux Fill img2img + ControlNet Depth — this is the product's core value proposition, the path that defeats the "copy-paste" effect.** SDXL img2img is an opt-in cost-optimisation fallback only, never the default. Request body: `scene_id`, list of `object_id`s currently placed, `placement` map (for cache key), `harmonize_strength ∈ [0.15, 0.55]` **(required field — no server-side default; the slider in 5.5 also has no pre-selected value until task 5.6 lands one, possibly per object type)**, `seed?`. Pipeline:
   1. Fetch (or generate) the proxy composite + mask + depth map via task 5.3.
   2. **Primary path** — call `AsyncFalClient.run("fal-ai/flux-pro/v1/fill", ...)` with the composite as `image_url`, the B/W mask, a depth-conditioned ControlNet, the request's `harmonize_strength`, and a fixed harmonisation prompt suffix ("preserve object identity, integrate lighting and cast shadows naturally, photorealistic interior, no new objects").
@@ -512,11 +512,11 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
   5. All fal.ai calls go through `app/cloud/fal_client.py` — `architecture-keeper` must pass on the PR.
 - **Files:** `apps/api/app/compose/harmonize.py` (new), `apps/api/app/compose/router.py`, `apps/api/app/schemas.py`, `apps/api/tests/test_harmonize.py` (new).
 - **Acceptance:**
-  - [ ] Mocked fal response → endpoint returns a JPEG data URL inside the success envelope
-  - [ ] Cache hit on identical inputs is < 50 ms; miss path is observed in tests
-  - [ ] Timeout, rate-limit, malformed-payload, and SDXL-fallback paths all covered by tests
-  - [ ] Latency budget documented: p95 ≤ 25 s for 1024×1024 on Flux Fill, ≤ 15 s on SDXL
-  - [ ] No fal SDK import outside `app/cloud/`
+  - [x] Mocked fal response → endpoint returns a JPEG data URL inside the success envelope
+  - [x] Cache hit on identical inputs is < 50 ms; miss path is observed in tests
+  - [x] Timeout, rate-limit, malformed-payload, and SDXL-fallback paths all covered by tests
+  - [x] Latency budget documented: p95 ≤ 25 s for 1024×1024 on Flux Fill, ≤ 15 s on SDXL
+  - [x] No fal SDK import outside `app/cloud/`
 
 ### 5.5 Harmonize flow in the UI (UI track)
 

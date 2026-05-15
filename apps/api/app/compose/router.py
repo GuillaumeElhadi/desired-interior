@@ -9,16 +9,26 @@ from app.cloud.fal_client import (
     FalRateLimitError,
     FalTimeoutError,
 )
+from app.compose import harmonize_cache
 from app.compose import preview_cache as preview_cache_module
 from app.compose.cache import load_cached, save_cached
 from app.compose.composition import make_cache_key, run_composition
+from app.compose.harmonize import make_harmonize_cache_key, run_harmonize
 from app.compose.preview import run_preview
 from app.dependencies import get_fal_client
 from app.exceptions import AppError
 from app.objects.cache import load_cached as load_object
 from app.scenes.cache import load_cached as load_scene
 from app.scenes.cache import load_original
-from app.schemas import ComposedImage, ComposeRequest, ComposeResponse, PreviewComposeResponse
+from app.schemas import (
+    ComposedImage,
+    ComposeRequest,
+    ComposeResponse,
+    HarmonizeRequest,
+    HarmonizeResponse,
+    PreviewComposeResponse,
+)
+from app.settings import get_settings
 
 _log = structlog.get_logger()
 router = APIRouter(prefix="/compose", tags=["compose"])
@@ -187,4 +197,80 @@ async def compose_preview(
         image=ComposedImage(url=result["url"], content_type=result["content_type"]),
     )
     preview_cache_module.save_cached(cache_key, response.model_dump())
+    return response
+
+
+@router.post("/harmonize", dependencies=[Depends(verify_ipc_token)])
+async def harmonize(
+    body: HarmonizeRequest,
+    fal: AsyncFalClient = Depends(get_fal_client),
+) -> HarmonizeResponse:
+    scene_data = load_scene(body.scene_id)
+    if scene_data is None:
+        raise AppError(
+            status_code=404,
+            error_code="scene_not_found",
+            message="Scene not found — re-upload the room photo.",
+        )
+
+    scene_image_bytes = load_original(body.scene_id)
+    if scene_image_bytes is None:
+        raise AppError(
+            status_code=409,
+            error_code="scene_original_missing",
+            message=(
+                f"Original image for scene {body.scene_id!r} is not cached. "
+                "Re-run /scenes/preprocess to rebuild the cache."
+            ),
+        )
+
+    depth_map_url: str = (scene_data.get("depth_map") or {}).get("url", "")
+
+    objects = []
+    for op in body.objects:
+        object_data = load_object(op.object_id)
+        if object_data is None:
+            raise AppError(
+                status_code=404,
+                error_code="object_not_found",
+                message=f"Object {op.object_id!r} not found — re-upload the furniture photo.",
+            )
+        masked = object_data.get("masked") or {}
+        objects.append((masked.get("url", ""), masked.get("object_type", "floor"), op.placement))
+
+    backend = get_settings().harmonizer_backend
+    cache_key = make_harmonize_cache_key(
+        body.scene_id, body.objects, backend, body.harmonize_strength, body.seed
+    )
+    _log.info(
+        "harmonize_request",
+        scene_id=body.scene_id,
+        num_objects=len(body.objects),
+        backend=backend,
+        strength=body.harmonize_strength,
+        cache_key=cache_key,
+    )
+
+    cached = harmonize_cache.load_cached(cache_key)
+    if cached is not None:
+        return HarmonizeResponse(**cached)
+
+    try:
+        result = await run_harmonize(
+            scene_image_bytes=scene_image_bytes,
+            depth_map_url=depth_map_url,
+            objects=objects,
+            harmonize_strength=body.harmonize_strength,
+            seed=body.seed,
+            fal=fal,
+            backend=backend,
+        )
+    except FalError as exc:
+        raise _fal_error_to_app_error(exc) from exc
+
+    response = HarmonizeResponse(
+        harmonize_id=cache_key,
+        image=ComposedImage(url=result["url"], content_type=result["content_type"]),
+    )
+    harmonize_cache.save_cached(cache_key, response.model_dump())
     return response
