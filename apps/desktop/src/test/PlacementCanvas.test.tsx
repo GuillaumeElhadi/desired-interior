@@ -488,6 +488,38 @@ describe("PlacementCanvas — duplication", () => {
       expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     });
   });
+
+  it("context menu moves focus to the Duplicate menuitem on open", async () => {
+    await renderWithSelected();
+    const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.contextMenu(node, { clientX: 200, clientY: 150 });
+    await waitFor(() => {
+      const menuItem = screen.getByRole("menuitem", { name: /duplicate/i });
+      expect(document.activeElement).toBe(menuItem);
+    });
+  });
+
+  it("Tab key closes the context menu", async () => {
+    await renderWithSelected();
+    const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.contextMenu(node, { clientX: 200, clientY: 150 });
+    const menu = await screen.findByRole("menu");
+    fireEvent.keyDown(menu, { key: "Tab" });
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+  });
+
+  it("pointer-down outside the context menu closes it", async () => {
+    await renderWithSelected();
+    const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.contextMenu(node, { clientX: 200, clientY: 150 });
+    await screen.findByRole("menu");
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe("PlacementCanvas — preview", () => {

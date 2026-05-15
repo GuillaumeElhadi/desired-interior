@@ -143,7 +143,8 @@ export function PlacementCanvas({
   const trRef = useRef<Konva.Transformer>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const placementsRef = useRef<PlacementRecord[]>([]);
+  const contextMenuItemRef = useRef<HTMLButtonElement>(null);
+  const handleDuplicateRef = useRef<(id: string) => Promise<void>>(async () => {});
   const previewAbortRef = useRef<AbortController | null>(null);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewGenRef = useRef(0);
@@ -240,12 +241,6 @@ export function PlacementCanvas({
       .catch(console.error);
   }, [sceneId]);
 
-  // Keep ref in sync so the keyboard handler can read current placements
-  // without re-registering on every placement mutation.
-  useEffect(() => {
-    placementsRef.current = placements;
-  }, [placements]);
-
   // Attach Transformer to selected node
   useEffect(() => {
     if (!trRef.current || !stageRef.current) return;
@@ -283,14 +278,7 @@ export function PlacementCanvas({
 
       if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "D")) {
         e.preventDefault();
-        const source = placementsRef.current.find((p) => p.id === selectedId);
-        if (source) {
-          const dup = duplicatePlacement(source);
-          void savePlacement(dup).then(() => {
-            setPlacements((prev) => [...prev, dup]);
-            setSelectedId(dup.id);
-          });
-        }
+        void handleDuplicateRef.current(selectedId);
         return;
       }
 
@@ -503,6 +491,28 @@ export function PlacementCanvas({
     },
     [placements]
   );
+
+  // Keep ref in sync so the keyboard handler always calls the latest version
+  // without adding handleDuplicate to the keyboard effect's dep array.
+  useEffect(() => {
+    handleDuplicateRef.current = handleDuplicate;
+  }, [handleDuplicate]);
+
+  // Move focus into the context menu's first item when it opens (ARIA APG).
+  useEffect(() => {
+    if (contextMenu) contextMenuItemRef.current?.focus();
+  }, [contextMenu]);
+
+  // Dismiss context menu when the user clicks outside it.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: PointerEvent) => {
+      const menu = contextMenuItemRef.current?.closest('[role="menu"]');
+      if (menu && !menu.contains(e.target as Node)) setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [contextMenu]);
 
   const computeAutoPlacement = useCallback(
     (
@@ -750,7 +760,18 @@ export function PlacementCanvas({
                   const rect = containerRef.current?.getBoundingClientRect();
                   const x = e.evt.clientX - (rect?.left ?? 0);
                   const y = e.evt.clientY - (rect?.top ?? 0);
-                  setContextMenu({ x, y, placementId: p.id });
+                  // Clamp so the menu stays inside the canvas (overflow-hidden clips it otherwise).
+                  const MENU_W = 132;
+                  const MENU_H = 44;
+                  const safeX = Math.min(
+                    x,
+                    (containerRef.current?.clientWidth ?? 9999) - MENU_W - 4
+                  );
+                  const safeY = Math.min(
+                    y,
+                    (containerRef.current?.clientHeight ?? 9999) - MENU_H - 4
+                  );
+                  setContextMenu({ x: safeX, y: safeY, placementId: p.id });
                 }}
                 onDragEnd={handleDragEnd(p.id)}
                 onTransformEnd={handleTransformEnd(p.id)}
@@ -851,15 +872,18 @@ export function PlacementCanvas({
           const entry = objectsMap.get(p.object_id);
           const naturalWidth = entry?.image.naturalWidth ?? 0;
           const centerX = p.x + (naturalWidth * p.scale_x) / 2;
-          const toolbarY = Math.max(8, p.y - 44);
+          // 74 px clears Konva's rotation handle (≈32 px above bbox) + scale handles.
+          // X center is unrotated; rotation drift is a known v1 limitation.
+          const toolbarY = Math.max(8, p.y - 74);
           return (
             <div
-              className="absolute z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-black/75 px-1.5 py-1 backdrop-blur-sm"
+              className="absolute z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-black/75 px-1.5 py-1 backdrop-blur-sm"
               style={{ left: centerX, top: toolbarY }}
             >
               <button
                 type="button"
                 aria-label="Duplicate object"
+                title="Duplicate (⌘D)"
                 onClick={() => void handleDuplicate(selectedId)}
                 className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               >
@@ -887,20 +911,27 @@ export function PlacementCanvas({
       {/* Right-click context menu */}
       {contextMenu && (
         <div
-          className="absolute z-30 min-w-[130px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-30 min-w-32 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           role="menu"
           aria-label="Object actions"
+          onKeyDown={(e) => {
+            if (e.key === "Tab" || e.key === "Escape") {
+              e.stopPropagation();
+              setContextMenu(null);
+            }
+          }}
         >
           <button
+            ref={contextMenuItemRef}
             type="button"
             role="menuitem"
             onClick={() => void handleDuplicate(contextMenu.placementId)}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:bg-gray-50"
+            className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-accent"
           >
             <svg
               aria-hidden="true"
-              className="h-3.5 w-3.5 text-gray-500"
+              className="h-3.5 w-3.5 flex-shrink-0 text-gray-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -914,6 +945,7 @@ export function PlacementCanvas({
               />
             </svg>
             Duplicate
+            <span className="ml-auto pl-3 text-[11px] text-gray-400">⌘D</span>
           </button>
         </div>
       )}
