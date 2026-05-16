@@ -75,5 +75,5 @@ Cached compositions written under the previous Flux Fill path are still valid in
 ## Follow-ups
 
 - Task 4.5: add deterministic PIL shadow rendering (elliptical ground shadow for floor objects, drop-shadow for wall objects).
-- Future: revisit a low-strength AI harmonisation pass once the faithfulness contract is firmly established.
+- **Shipped — [ADR-0008](0008-ai-harmonizer.md)**: the low-strength AI harmonisation pass was implemented in Phase 5 (tasks 5.3–5.6) as an opt-in "Harmonize" step. Faithfulness is preserved via the halo-masking strategy and explicit object-pixel restoration described in ADR-0008.
 - Future: implement `depth_hint`-driven perspective correction for floor objects placed at varying depths.
