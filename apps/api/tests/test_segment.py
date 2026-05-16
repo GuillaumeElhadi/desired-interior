@@ -45,25 +45,19 @@ def _make_grayscale_png(width: int = _W, height: int = _H, value: int = 200) -> 
     return buf.getvalue()
 
 
-def _mock_fal_response(
-    mask_png: bytes | None = None,
-    boxes: list | None = None,
-    scores: list | None = None,
-) -> dict:
+def _mock_fal_response(mask_png: bytes | None = None) -> dict:
+    """SAM 2 returns the mask in the 'image' field (primary result)."""
     if mask_png is None:
         mask_png = _make_grayscale_png()
     mask_b64 = base64.b64encode(mask_png).decode()
     return {
-        "masks": [
-            {
-                "url": f"data:image/png;base64,{mask_b64}",
-                "width": _W,
-                "height": _H,
-                "content_type": "image/png",
-            }
-        ],
-        "boxes": boxes if boxes is not None else [[0.5, 0.5, 0.4, 0.3]],
-        "scores": scores if scores is not None else [0.92],
+        "image": {
+            "url": f"data:image/png;base64,{mask_b64}",
+            "width": _W,
+            "height": _H,
+            "content_type": "image/png",
+        },
+        "masks": [],
     }
 
 
@@ -77,9 +71,11 @@ def _make_fal_client(
     else:
         fal_response = response or _mock_fal_response()
         fal.run = AsyncMock(return_value=fal_response)
-        masks = fal_response.get("masks") or []
-        if masks:
-            mask_bytes = base64.b64decode(masks[0]["url"].split(",", 1)[1])
+        # SAM 2 returns mask in "image" field; fall back to first mask in list.
+        primary_url = (fal_response.get("image") or {}).get("url", "")
+        mask_url = primary_url or ((fal_response.get("masks") or [{}])[0]).get("url", "")
+        if mask_url and mask_url.startswith("data:"):
+            mask_bytes = base64.b64decode(mask_url.split(",", 1)[1])
         else:
             mask_bytes = b""
         fal.fetch_bytes = AsyncMock(return_value=mask_bytes)
@@ -106,12 +102,15 @@ async def test_run_segment_point_returns_binary_mask_and_bbox():
     gray = img.convert("L")
     assert all(p in (0, 255) for p in gray.tobytes())
 
-    # BBox normalised [0.5, 0.5, 0.4, 0.3] → pixel [x=52, y=89.6, w=102.4, h=76.8]
+    # Bbox derived from mask white pixels — our grayscale mask (value=200 > 128) is all white.
+    # getbbox() on a fully-white image returns (0, 0, W, H).
     assert len(bbox) == 4
-    assert bbox[2] == pytest.approx(0.4 * _W)  # width
-    assert bbox[3] == pytest.approx(0.3 * _H)  # height
+    assert bbox[0] == pytest.approx(0.0)  # x_min
+    assert bbox[1] == pytest.approx(0.0)  # y_min
+    assert bbox[2] == pytest.approx(float(_W))  # width
+    assert bbox[3] == pytest.approx(float(_H))  # height
 
-    assert score == pytest.approx(0.92)
+    assert score == pytest.approx(1.0)  # SAM 2 path always returns 1.0
 
 
 @pytest.mark.asyncio
@@ -123,15 +122,15 @@ async def test_run_segment_point_calls_sam_with_correct_payload():
 
     call_args = fal.run.call_args
     endpoint, payload = call_args[0][0], call_args[0][1]
-    assert endpoint == "fal-ai/sam-3-1/image"
-    assert payload["point_prompts"] == [{"x": 50, "y": 120, "label": 1}]
-    assert payload["apply_mask"] is False
-    assert payload["include_boxes"] is True
+    assert endpoint == "fal-ai/sam2/image"
+    assert payload["prompts"] == [{"x": 50, "y": 120, "label": 1}]
+    assert "output_format" in payload
 
 
 @pytest.mark.asyncio
 async def test_run_segment_point_raises_on_empty_masks():
-    fal = _make_fal_client({"masks": [], "boxes": [], "scores": []})
+    # Both "masks" and "image" missing/empty → should raise
+    fal = _make_fal_client({"masks": [], "image": {}})
     fal.fetch_bytes = AsyncMock(return_value=b"")
     with pytest.raises(FalMalformedResponseError):
         await run_segment_point(_make_jpeg(), x=0, y=0, fal=fal)
@@ -149,7 +148,7 @@ async def test_run_segment_point_binarises_grayscale_mask():
     mixed_png = buf.getvalue()
 
     fal = _make_fal_client(_mock_fal_response(mask_png=mixed_png))
-    fal.fetch_bytes = AsyncMock(return_value=mixed_png)
+    fal.fetch_bytes = AsyncMock(return_value=mixed_png)  # override with mixed PNG
 
     mask_bytes, _, _ = await run_segment_point(_make_jpeg(), x=10, y=10, fal=fal)
     result = Image.open(io.BytesIO(mask_bytes)).convert("L")

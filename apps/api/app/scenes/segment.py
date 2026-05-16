@@ -23,7 +23,7 @@ from app.disk_cache import save_raw as _save_raw
 
 _log = structlog.get_logger()
 
-_SAM_ENDPOINT = "fal-ai/sam-3-1/image"
+_SAM_ENDPOINT = "fal-ai/sam2/image"
 _MASK_FILENAME = "mask.png"
 
 
@@ -81,57 +81,43 @@ async def run_segment_point(
 
     _log.debug("segment_point_fal_call", scene_sha=scene_sha, x=x, y=y)
 
+    # SAM 2 uses "prompts" (not "point_prompts") with {x, y, label}.
     result = await fal.run(
         _SAM_ENDPOINT,
         {
             "image_url": scene_data_url,
-            "point_prompts": [{"x": x, "y": y, "label": 1}],
-            "apply_mask": False,
-            "include_boxes": True,
-            "include_scores": True,
+            "prompts": [{"x": x, "y": y, "label": 1}],
             "output_format": "png",
         },
     )
 
+    # SAM 2 may return the mask in "image" (primary) or "masks" list.
     masks = result.get("masks") or []
-    if not masks:
-        raise FalMalformedResponseError("SAM 3.1 returned no masks")
-
-    mask_entry = masks[0]
-    mask_url = mask_entry.get("url", "")
+    primary_image = result.get("image") or {}
+    mask_url = (masks[0].get("url") if masks else None) or primary_image.get("url", "")
     if not mask_url:
-        raise FalMalformedResponseError("SAM 3.1 mask entry has no url")
-
-    mask_w: int = mask_entry.get("width") or 0
-    mask_h: int = mask_entry.get("height") or 0
+        raise FalMalformedResponseError(
+            f"SAM 2 returned no mask URL; keys present: {list(result.keys())}"
+        )
 
     # Fetch and binarise the mask PNG (white = object, black = background)
     mask_bytes_raw = await fal.fetch_bytes(mask_url)
     img = Image.open(io.BytesIO(mask_bytes_raw)).convert("L")
-    if mask_w == 0 or mask_h == 0:
-        mask_w, mask_h = img.size
+    mask_w, mask_h = img.size
     binary_img = img.point(lambda p: 255 if p > 128 else 0, "L")
     buf = io.BytesIO()
     binary_img.save(buf, "PNG")
     binary_mask_bytes = buf.getvalue()
 
-    # Convert normalised [cx, cy, w, h] boxes to pixel [x, y, w, h]
-    raw_boxes = result.get("boxes") or []
-    if raw_boxes:
-        cx, cy, bw, bh = raw_boxes[0]
-        bbox = [
-            (cx - bw / 2) * mask_w,
-            (cy - bh / 2) * mask_h,
-            bw * mask_w,
-            bh * mask_h,
-        ]
+    # Derive bbox from the mask itself (bounding box of white pixels).
+    bbox_pil = binary_img.getbbox()  # returns (x_min, y_min, x_max, y_max) or None
+    if bbox_pil:
+        bx, by, bx2, by2 = bbox_pil
+        bbox = [float(bx), float(by), float(bx2 - bx), float(by2 - by)]
     else:
         bbox = [0.0, 0.0, float(mask_w), float(mask_h)]
 
-    scores = result.get("scores") or [0.0]
-    score = float(scores[0])
-
-    return binary_mask_bytes, bbox, score
+    return binary_mask_bytes, bbox, 1.0
 
 
 async def segment_point(
