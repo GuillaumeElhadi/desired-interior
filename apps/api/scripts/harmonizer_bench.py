@@ -62,7 +62,6 @@ FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures" / "objects"
 
 _FULL_STRENGTHS = [0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55]
 _QUICK_STRENGTHS = [0.25, 0.35, 0.45]
-_DEFAULT_BACKENDS = ["flux"]
 
 # Placements: bboxes relative to a 512×512 scene image.
 # Wall placement: centred in upper 40% of the image.
