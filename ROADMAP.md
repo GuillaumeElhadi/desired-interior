@@ -527,7 +527,7 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
   - [x] Happy path: click Harmonize → spinner → harmonised image appears, before/after slider compares to proxy
   - [x] Cancel mid-harmonise aborts the request server-side (verified in test)
   - [x] Errors from 5.4 are mapped via the matrix from task 4.3
-  - [ ] `design-reviewer` agent approves the layout and a11y of the new controls
+  - [x] `design-reviewer` agent approves the layout and a11y of the new controls
 
 ### 5.6 Harmonizer quality + latency tuning (AI polish track)
 
