@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   ApiError,
   checkHealth,
+  cleanScene,
   compose,
   composePreview,
   getApiBaseUrl,
@@ -485,5 +486,114 @@ describe("harmonize", () => {
       )
     );
     await expect(harmonize(HARMONIZE_REQUEST)).rejects.toMatchObject({ errorCode: "fal_error" });
+  });
+});
+
+describe("cleanScene", () => {
+  const CLEAN_REQUEST = {
+    scene_id: "a".repeat(64),
+    mask: "data:image/png;base64,iVBORw0KGgo=",
+    prompt_hint: "empty floor",
+  };
+
+  const CLEAN_RESPONSE = {
+    cleaned_scene_id: "b".repeat(64),
+    cleaned_url: "https://cdn.fal.ai/clean.jpg",
+    content_type: "image/jpeg",
+  };
+
+  it("POSTs JSON to /scenes/clean with auth header and returns parsed body", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(CLEAN_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await cleanScene(CLEAN_REQUEST);
+
+    expect(result).toEqual(CLEAN_RESPONSE);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:9999/scenes/clean",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(CLEAN_REQUEST),
+      })
+    );
+  });
+
+  it("threads AbortSignal through to fetch", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(CLEAN_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const ac = new AbortController();
+    await cleanScene(CLEAN_REQUEST, ac.signal);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: ac.signal })
+    );
+  });
+
+  it("throws ApiError with fal_timeout on 504", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(504, "Gateway Timeout", {
+          error_code: "fal_timeout",
+          message: "timed out",
+          request_id: "r11",
+        })
+      )
+    );
+    await expect(cleanScene(CLEAN_REQUEST)).rejects.toBeInstanceOf(ApiError);
+    await expect(cleanScene(CLEAN_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_timeout",
+      httpStatus: 504,
+    });
+  });
+
+  it("throws ApiError with fal_rate_limited on 429", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(429, "Too Many Requests", {
+          error_code: "fal_rate_limited",
+          message: "slow down",
+          request_id: "r12",
+        })
+      )
+    );
+    await expect(cleanScene(CLEAN_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_rate_limited",
+    });
+  });
+
+  it("throws ApiError with bad_request on invalid mask (422)", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(422, "Unprocessable Entity", {
+          error_code: "mask_coverage_exceeded",
+          message: "mask covers >20% of the scene",
+          request_id: "r13",
+        })
+      )
+    );
+    await expect(cleanScene(CLEAN_REQUEST)).rejects.toMatchObject({
+      errorCode: "mask_coverage_exceeded",
+      httpStatus: 422,
+    });
   });
 });

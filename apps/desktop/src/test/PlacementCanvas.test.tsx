@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlacementCanvas } from "../components/PlacementCanvas";
 import * as api from "../lib/api";
+import type { CleanSceneResponse } from "../lib/api";
 import * as db from "../lib/db";
 
 vi.mock("konva", () => ({ default: {} }));
@@ -18,19 +19,40 @@ vi.mock("react-konva", async () => {
       id,
       onClick,
       onContextMenu,
+      opacity,
     }: {
       id?: string;
       image?: HTMLImageElement;
       onClick?: () => void;
       onContextMenu?: (e: { evt: MouseEvent }) => void;
+      opacity?: number;
       [k: string]: unknown;
     }) => (
       <img
         data-testid={id != null ? `node-${id}` : "room-image"}
+        data-opacity={opacity}
         id={id}
         onClick={onClick}
         onContextMenu={(e) => onContextMenu?.({ evt: e.nativeEvent })}
         alt=""
+      />
+    ),
+    Rect: ({
+      onClick,
+      fill,
+      "data-testid": testId,
+      ...rest
+    }: {
+      onClick?: () => void;
+      fill?: string;
+      "data-testid"?: string;
+      [k: string]: unknown;
+    }) => (
+      <div
+        data-testid={testId ?? "mask-rect"}
+        data-fill={fill}
+        onClick={onClick}
+        {...(rest as React.HTMLAttributes<HTMLDivElement>)}
       />
     ),
     Transformer: forwardRef(() => null),
@@ -49,6 +71,7 @@ vi.mock("../lib/db", () => ({
 vi.mock("../lib/api", () => ({
   compose: vi.fn(),
   composePreview: vi.fn(),
+  cleanScene: vi.fn(),
 }));
 
 const SCENE_ID = "a".repeat(64);
@@ -525,6 +548,270 @@ describe("PlacementCanvas — duplication", () => {
     fireEvent.pointerDown(document.body);
     await waitFor(() => {
       expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe("PlacementCanvas — erase mode", () => {
+  // Small-area masks: each < 20% of the 100×100 mock image (10000px → 20% = 2000px)
+  const MASKS_SMALL = [
+    {
+      url: "",
+      label: "floor",
+      score: 0.9,
+      area: 800,
+      bbox: [0, 300, 200, 200],
+      surface_type: "floor",
+    },
+    {
+      url: "",
+      label: "wall",
+      score: 0.8,
+      area: 900,
+      bbox: [200, 0, 400, 300],
+      surface_type: "wall",
+    },
+  ];
+
+  // Large-area masks: combined area exceeds 20% of 10000px = 2000px
+  const MASKS_LARGE = [
+    {
+      url: "",
+      label: "floor",
+      score: 0.9,
+      area: 1800,
+      bbox: [0, 300, 200, 200],
+      surface_type: "floor",
+    },
+    {
+      url: "",
+      label: "wall",
+      score: 0.8,
+      area: 1800,
+      bbox: [200, 0, 400, 300],
+      surface_type: "wall",
+    },
+  ];
+
+  const PROPS_WITH_MASKS = {
+    ...DEFAULT_PROPS,
+    masks: MASKS_SMALL,
+  };
+
+  const CLEAN_RESPONSE: CleanSceneResponse = {
+    cleaned_scene_id: "c".repeat(64),
+    cleaned_url: "https://cdn.fal.ai/cleaned.jpg",
+    content_type: "image/jpeg",
+  };
+
+  function stubCanvasContext() {
+    const mockCtx = {
+      fillStyle: "",
+      fillRect: vi.fn(),
+    };
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    // jsdom has no canvas rendering — override prototype methods so handleClean
+    // can build the mask data URL without throwing.
+    HTMLCanvasElement.prototype.getContext = vi
+      .fn()
+      .mockReturnValue(mockCtx) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.toDataURL = vi
+      .fn()
+      .mockReturnValue("data:image/png;base64,dGVzdA==");
+    return {
+      mockCtx,
+      restore() {
+        HTMLCanvasElement.prototype.getContext = origGetContext;
+        HTMLCanvasElement.prototype.toDataURL = origToDataURL;
+      },
+    };
+  }
+
+  it("toolbar renders Place and Erase buttons by default", () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    expect(screen.getByRole("button", { name: /^place$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^erase$/i })).toBeInTheDocument();
+  });
+
+  it("Place button is pressed by default, Erase is not", () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    expect(screen.getByRole("button", { name: /^place$/i })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: /^erase$/i })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+  });
+
+  it("clicking Erase sets mode and shows the erase hint", async () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/click a region to select/i)).toBeInTheDocument();
+    });
+  });
+
+  it("objects fade to 40% opacity in erase mode", async () => {
+    vi.mocked(db.loadPlacements).mockResolvedValue([MOCK_PLACEMENT]);
+    vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    await screen.findByTestId(`node-${PLACEMENT_ID}`);
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    await waitFor(() => {
+      const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
+      expect(node).toHaveAttribute("data-opacity", "0.4");
+    });
+  });
+
+  it("clicking a mask rect toggles its selection and updates Clean button count", async () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+
+    const rects = await screen.findAllByTestId("mask-rect");
+    expect(rects.length).toBeGreaterThan(0);
+
+    fireEvent.click(rects[0]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1");
+    });
+
+    fireEvent.click(rects[0]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).not.toHaveTextContent("1");
+    });
+  });
+
+  it("Clean button is disabled when no mask is selected", async () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).toBeDisabled();
+    });
+  });
+
+  it("Clean button is disabled when selection exceeds 20% coverage", async () => {
+    // Both MASKS_LARGE have area=1800; combined = 3600 / 10000 = 36% > 20% rail.
+    render(<PlacementCanvas {...DEFAULT_PROPS} masks={MASKS_LARGE} />);
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+
+    const rects = await screen.findAllByTestId("mask-rect");
+    fireEvent.click(rects[0]);
+    fireEvent.click(rects[1]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).toBeDisabled();
+    });
+    expect(screen.getByTitle(/deselect some regions/i)).toBeInTheDocument();
+  });
+
+  it("Clean calls cleanScene and fires onSceneCleaned on success", async () => {
+    const { restore } = stubCanvasContext();
+    vi.mocked(api.cleanScene).mockResolvedValue(CLEAN_RESPONSE);
+
+    const onSceneCleaned = vi.fn();
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} onSceneCleaned={onSceneCleaned} />);
+    // Wait for roomImage to load — the KonvaImage mock only renders once roomImage is non-null.
+    await screen.findByTestId("room-image");
+
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+
+    const rects = await screen.findAllByTestId("mask-rect");
+    fireEvent.click(rects[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /clean/i }));
+
+    await waitFor(() => {
+      expect(api.cleanScene).toHaveBeenCalledWith(
+        expect.objectContaining({ scene_id: SCENE_ID }),
+        expect.any(AbortSignal)
+      );
+      expect(onSceneCleaned).toHaveBeenCalledWith(
+        CLEAN_RESPONSE.cleaned_scene_id,
+        CLEAN_RESPONSE.cleaned_url
+      );
+    });
+    restore();
+  });
+
+  it("Clean error shows an error alert overlay", async () => {
+    const { restore } = stubCanvasContext();
+    vi.mocked(api.cleanScene).mockRejectedValue(new Error("lama failed: 502"));
+
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    await screen.findByTestId("room-image");
+
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+
+    const rects = await screen.findAllByTestId("mask-rect");
+    fireEvent.click(rects[0]);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /clean/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: /clean/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+    restore();
+  });
+
+  it("'Use cleaned scene' pill is visible when cleanedVariant prop is set", async () => {
+    render(
+      <PlacementCanvas
+        {...PROPS_WITH_MASKS}
+        cleanedVariant={{ sceneId: "x".repeat(64), imageUrl: "blob:cleaned" }}
+        isShowingCleanedScene={false}
+      />
+    );
+    expect(screen.getByRole("button", { name: /use cleaned scene/i })).toBeInTheDocument();
+  });
+
+  it("'Restore original' pill is visible when isShowingCleanedScene is true", async () => {
+    render(
+      <PlacementCanvas
+        {...PROPS_WITH_MASKS}
+        cleanedVariant={{ sceneId: "x".repeat(64), imageUrl: "blob:cleaned" }}
+        isShowingCleanedScene={true}
+        onRestoreOriginal={vi.fn()}
+      />
+    );
+    expect(screen.getByRole("button", { name: /restore original/i })).toBeInTheDocument();
+  });
+
+  it("E key toggles between Place and Erase mode", async () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    fireEvent.keyDown(window, { key: "e" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^erase$/i })).toHaveAttribute(
+        "aria-pressed",
+        "true"
+      );
+    });
+    fireEvent.keyDown(window, { key: "e" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^place$/i })).toHaveAttribute(
+        "aria-pressed",
+        "true"
+      );
+    });
+  });
+
+  it("Escape in erase mode deselects all mask regions", async () => {
+    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    const rects = await screen.findAllByTestId("mask-rect");
+    fireEvent.click(rects[0]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1");
+    });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).not.toHaveTextContent("1");
     });
   });
 });

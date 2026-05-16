@@ -11,6 +11,7 @@ import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { type ObjectPlacement, checkHealth, harmonize, updateSettings } from "./lib/api";
 import { toUserMessage } from "./lib/errors";
 import { loadSettings, saveSettings } from "./lib/settings";
+import { loadSceneVariant, saveSceneVariant } from "./lib/sceneStore";
 import * as telemetry from "./lib/telemetry";
 
 interface HealthState {
@@ -62,6 +63,12 @@ function App() {
   const [retryCount, setRetryCount] = useState(0);
   const [analyticsDecided, setAnalyticsDecided] = useState(true);
   const [harmonizeStrength, setHarmonizeStrength] = useState(0.38);
+  const [cleanedVariant, setCleanedVariant] = useState<{
+    sceneId: string;
+    imageUrl: string;
+  } | null>(null);
+  const [isShowingCleanedScene, setIsShowingCleanedScene] = useState(false);
+  const [originalSceneCtx, setOriginalSceneCtx] = useState<SceneContext | null>(null);
   const isOnline = useOnlineStatus();
 
   useEffect(() => {
@@ -123,6 +130,59 @@ function App() {
       .then((s) => saveSettings({ ...s, analyticsEnabled: false }))
       .catch(console.error);
   }, []);
+
+  // Reset variant state when scene changes — render-time setState avoids the
+  // react-hooks/set-state-in-effect rule (same pattern as PlacementCanvas prevImageUrl).
+  const [prevSceneId, setPrevSceneId] = useState<string | undefined>(sceneCtx?.sceneId);
+  if (prevSceneId !== sceneCtx?.sceneId) {
+    setPrevSceneId(sceneCtx?.sceneId);
+    setCleanedVariant(null);
+    setIsShowingCleanedScene(false);
+    setOriginalSceneCtx(null);
+  }
+
+  // Rehydrate cleaned variant from store when a scene is loaded
+  useEffect(() => {
+    if (!sceneCtx?.sceneId) return;
+    loadSceneVariant(sceneCtx.sceneId)
+      .then((v) => {
+        // Validate the stored URL is a data URL to prevent open-redirect if the
+        // store file were ever corrupted or tampered (defence-in-depth).
+        if (v && v.cleanedUrl.startsWith("data:image/")) {
+          setCleanedVariant({ sceneId: v.cleanedSceneId, imageUrl: v.cleanedUrl });
+        }
+      })
+      .catch(console.error);
+  }, [sceneCtx?.sceneId]);
+
+  const handleSceneCleaned = useCallback(
+    (cleanedSceneId: string, cleanedUrl: string) => {
+      if (!sceneCtx) return;
+      const variant = { sceneId: cleanedSceneId, imageUrl: cleanedUrl };
+      setCleanedVariant(variant);
+      saveSceneVariant(sceneCtx.sceneId, {
+        cleanedSceneId,
+        cleanedUrl,
+      }).catch(console.error);
+    },
+    [sceneCtx]
+  );
+
+  const handleUseCleanedScene = useCallback(() => {
+    if (!sceneCtx || !cleanedVariant) return;
+    if (!originalSceneCtx) setOriginalSceneCtx(sceneCtx);
+    setSceneCtx((prev) =>
+      prev ? { ...prev, sceneId: cleanedVariant.sceneId, imageUrl: cleanedVariant.imageUrl } : prev
+    );
+    setIsShowingCleanedScene(true);
+  }, [sceneCtx, cleanedVariant, originalSceneCtx]);
+
+  const handleRestoreOriginal = useCallback(() => {
+    const orig = originalSceneCtx;
+    if (!orig) return;
+    setSceneCtx(orig);
+    setIsShowingCleanedScene(false);
+  }, [originalSceneCtx]);
 
   const handleHarmonize = useCallback(
     async (signal: AbortSignal, strength: number) => {
@@ -257,6 +317,11 @@ function App() {
               onPendingObjectPlaced={() => setPendingObjectId(null)}
               falKeyConfigured={falKeyConfigured}
               onOpenSettings={() => setShowSettings(true)}
+              onSceneCleaned={handleSceneCleaned}
+              cleanedVariant={cleanedVariant}
+              onUseCleanedScene={handleUseCleanedScene}
+              onRestoreOriginal={handleRestoreOriginal}
+              isShowingCleanedScene={isShowingCleanedScene}
             />
             <ObjectPanel
               sceneId={sceneCtx.sceneId}

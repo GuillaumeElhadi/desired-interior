@@ -47,3 +47,20 @@ Deletions are immediate and persisted to the local SQLite database.
 ### Depth hint
 
 When an object is selected, a **Depth** slider appears at the bottom of the canvas. Drag it left (0) for foreground or right (1) for background. This value is passed to the composition pipeline when generating the final render.
+
+## Erase mode
+
+Erase mode lets you select SAM-segmented regions of the scene and remove them (e.g., pre-existing furniture, clutter) before placing new objects. Activate it via the **Place | Erase** toggle in the toolbar.
+
+| Key      | Action                                   |
+| -------- | ---------------------------------------- |
+| `E`      | Toggle between Place and Erase mode      |
+| `Escape` | Exit Erase mode and deselect all regions |
+
+In Erase mode:
+
+- Click any highlighted region to select it (glows red). Click again to deselect.
+- The **Clean** button sends the union of selected regions to the backend for inpainting.
+- The Clean button is disabled when no region is selected, or when the selection covers more than 20% of the image (backend safety rail).
+- After a successful clean, a **"Use cleaned scene"** pill appears. Click it to swap the working scene to the cleaned variant.
+- A **"Restore original"** affordance reverts back to the unmodified scene.

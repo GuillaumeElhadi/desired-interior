@@ -210,3 +210,20 @@ export async function postLog(body: LogRequest): Promise<void> {
     body: JSON.stringify(body),
   });
 }
+
+export type CleanSceneRequest = components["schemas"]["CleanSceneRequest"];
+export type CleanSceneResponse = components["schemas"]["CleanSceneResponse"];
+
+export async function cleanScene(
+  request: CleanSceneRequest,
+  signal?: AbortSignal
+): Promise<CleanSceneResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const response = await safeFetch(`${baseUrl}/scenes/clean`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  return response.json() as Promise<CleanSceneResponse>;
+}
