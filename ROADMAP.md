@@ -570,16 +570,16 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.9 Canvas "remove existing decor" mode (Scene cleanup track)
 
-- [ ] Branch: `feat/canvas-erase-mode`
+- [x] Branch: `feat/canvas-erase-mode`
 - New canvas mode toggle: **Place** (current default) ↔ **Erase**. In Erase mode the canvas overlays the SAM masks from `/scenes/preprocess` (already cached). The user clicks a region to add it to the erase selection (selected regions glow red), clicks again to deselect, then presses **Clean** to call `/scenes/clean` with the union of selected masks. Once a clean variant exists, a "Use cleaned scene" pill appears at the top of the canvas — clicking it swaps the working scene; an "Original" toggle reverts. Free brush / lasso selection is **out of scope** for this task and is recorded in the backlog.
 - **Files:** `apps/desktop/src/components/PlacementCanvas.tsx`, `apps/desktop/src/components/CanvasToolbar.tsx` (new), `apps/desktop/src/lib/api.ts`, `apps/desktop/src/lib/sceneStore.ts`, keyboard shortcuts doc.
 - **Acceptance:**
-  - [ ] Toggling between Place and Erase preserves placed objects (they fade to 40% opacity in Erase mode)
-  - [ ] Clicking a SAM region toggles its selection; the union mask sent to the backend is the OR of all selected regions, rasterised at the scene's native resolution
-  - [ ] Clean button is disabled when no region is selected or the union exceeds the backend's 20% safety rail (with a tooltip explaining why)
-  - [ ] After a successful clean, the canvas swaps to the cleaned scene and a "Restore original" affordance is available; both states are persisted in the project
-  - [ ] Failure paths use the error matrix from task 4.3
-  - [ ] `design-reviewer` agent approves the layout and a11y
+  - [x] Toggling between Place and Erase preserves placed objects (they fade to 40% opacity in Erase mode)
+  - [x] Clicking a SAM region toggles its selection; the union mask sent to the backend is the OR of all selected regions, rasterised at the scene's native resolution
+  - [x] Clean button is disabled when no region is selected or the union exceeds the backend's 20% safety rail (with a tooltip explaining why)
+  - [x] After a successful clean, the canvas swaps to the cleaned scene and a "Restore original" affordance is available; both states are persisted in the project
+  - [x] Failure paths use the error matrix from task 4.3
+  - [x] `design-reviewer` agent approves the layout and a11y
 
 ### 5.10 Scene variant persistence + history surfacing (Scene cleanup track)
 

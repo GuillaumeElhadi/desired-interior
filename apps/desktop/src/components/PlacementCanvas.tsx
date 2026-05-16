@@ -5,8 +5,11 @@ import {
   type ComposeResponse,
   type ObjectPlacement,
   type PreprocessResponse,
+  type SegmentPointResponse,
+  cleanScene,
   compose,
   composePreview,
+  segmentPoint,
 } from "../lib/api";
 import { toUserMessage } from "../lib/errors";
 import * as telemetry from "../lib/telemetry";
@@ -21,11 +24,47 @@ import {
   updatePlacement,
 } from "../lib/db";
 import { duplicatePlacement } from "../lib/placements";
+import { CanvasToolbar } from "./CanvasToolbar";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PREVIEW_DEBOUNCE_MS = 800;
+const ERASE_OBJECT_OPACITY = 0.4;
+
+interface SegmentResult {
+  id: string;
+  maskUrl: string;
+  displayImage: HTMLImageElement | null;
+  bbox: number[];
+  score: number;
+}
+
+async function colorizeSegmentMask(maskUrl: string): Promise<HTMLImageElement> {
+  const maskImg = await loadImage(maskUrl);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = maskImg.naturalWidth;
+    canvas.height = maskImg.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return maskImg;
+    ctx.drawImage(maskImg, 0, 0);
+    const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const isObj = d[i] > 128;
+      d[i] = isObj ? 220 : 0;
+      d[i + 1] = isObj ? 50 : 0;
+      d[i + 2] = isObj ? 50 : 0;
+      d[i + 3] = isObj ? 150 : 0;
+    }
+    ctx.putImageData(id, 0, 0);
+    return loadImage(canvas.toDataURL("image/png"));
+  } catch {
+    return maskImg;
+  }
+}
 
 type RenderPhase = "idle" | "rendering" | "error";
+type CleanPhase = "idle" | "cleaning" | "error";
 
 interface RenderErrorInfo {
   title: string;
@@ -54,6 +93,16 @@ interface PlacementCanvasProps {
   falKeyConfigured?: boolean;
   /** Called when the user clicks "Configure API key" in the render error. */
   onOpenSettings?: () => void;
+  /** Called when the scene clean succeeds with the new cleaned variant ids. */
+  onSceneCleaned?: (cleanedSceneId: string, cleanedUrl: string) => void;
+  /** When set, shows the "Use cleaned scene" pill. */
+  cleanedVariant?: { sceneId: string; imageUrl: string } | null;
+  /** Called when the user accepts the cleaned variant. */
+  onUseCleanedScene?: () => void;
+  /** Called when the user reverts to the original scene. */
+  onRestoreOriginal?: () => void;
+  /** True when the canvas is currently showing the cleaned variant (not the original). */
+  isShowingCleanedScene?: boolean;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -146,6 +195,11 @@ export function PlacementCanvas({
   onPendingObjectPlaced,
   falKeyConfigured = true,
   onOpenSettings,
+  onSceneCleaned,
+  cleanedVariant,
+  onUseCleanedScene,
+  onRestoreOriginal,
+  isShowingCleanedScene = false,
 }: PlacementCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -157,6 +211,7 @@ export function PlacementCanvas({
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewGenRef = useRef(0);
   const errorDismissRef = useRef<HTMLButtonElement>(null);
+  const cleanErrorDismissRef = useRef<HTMLButtonElement>(null);
 
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [roomImage, setRoomImage] = useState<HTMLImageElement | null>(null);
@@ -175,6 +230,15 @@ export function PlacementCanvas({
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("idle");
   const [previewImage, setPreviewImage] = useState<HTMLImageElement | null>(null);
 
+  // Erase mode
+  const [canvasMode, setCanvasMode] = useState<"place" | "erase">("place");
+  const [segments, setSegments] = useState<SegmentResult[]>([]);
+  const [isSegmenting, setIsSegmenting] = useState(false);
+  const [cleanPhase, setCleanPhase] = useState<CleanPhase>("idle");
+  const [cleanError, setCleanError] = useState<RenderErrorInfo | null>(null);
+  const cleanAbortRef = useRef<AbortController | null>(null);
+  const segmentAbortRef = useRef<AbortController | null>(null);
+
   // Move keyboard focus to the dismiss button whenever a render error appears
   // so screen reader users and keyboard-only users are landed on the alert.
   useEffect(() => {
@@ -182,6 +246,12 @@ export function PlacementCanvas({
       errorDismissRef.current?.focus();
     }
   }, [renderPhase]);
+
+  useEffect(() => {
+    if (cleanPhase === "error") {
+      cleanErrorDismissRef.current?.focus();
+    }
+  }, [cleanPhase]);
 
   // Measure container
   useEffect(() => {
@@ -271,6 +341,34 @@ export function PlacementCanvas({
       const el = e.target as HTMLElement;
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return;
 
+      // Toggle erase mode with E
+      if ((e.key === "e" || e.key === "E") && !e.metaKey && !e.ctrlKey) {
+        setCanvasMode((prev) => {
+          if (prev === "erase") {
+            segmentAbortRef.current?.abort();
+            setSegments([]);
+            setIsSegmenting(false);
+            setCleanPhase("idle");
+            setCleanError(null);
+            return "place";
+          }
+          return "erase";
+        });
+        return;
+      }
+
+      // In erase mode, Escape deselects all segments
+      if (canvasMode === "erase") {
+        if (e.key === "Escape") {
+          segmentAbortRef.current?.abort();
+          setSegments([]);
+          setIsSegmenting(false);
+          setCleanPhase("idle");
+          setCleanError(null);
+        }
+        return;
+      }
+
       if (!selectedId) {
         if (e.key === "Escape") setSelectedId(null);
         return;
@@ -334,7 +432,7 @@ export function PlacementCanvas({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedId]);
+  }, [selectedId, canvasMode]);
 
   // Compute room image render size (letterbox fit) — hoisted for use in handleRender
   const imgW = roomImage?.naturalWidth ?? 1;
@@ -399,6 +497,125 @@ export function PlacementCanvas({
       void triggerPreview();
     }, PREVIEW_DEBOUNCE_MS);
   }, [triggerPreview]);
+
+  const handleModeChange = useCallback((mode: "place" | "erase") => {
+    setCanvasMode(mode);
+    if (mode === "place") {
+      segmentAbortRef.current?.abort();
+      setSegments([]);
+      setIsSegmenting(false);
+      setCleanPhase("idle");
+      setCleanError(null);
+    }
+  }, []);
+
+  const handleEraseClick = useCallback(
+    async (stageX: number, stageY: number) => {
+      if (!roomImage) return;
+
+      const imgX = Math.round((stageX - roomOffsetX) / scale);
+      const imgY = Math.round((stageY - roomOffsetY) / scale);
+
+      // Bounds check
+      if (imgX < 0 || imgY < 0 || imgX >= roomImage.naturalWidth || imgY >= roomImage.naturalHeight)
+        return;
+
+      // Toggle: click inside an existing segment's bbox → deselect
+      const hitIdx = segments.findIndex((s) => {
+        const [bx, by, bw, bh] = s.bbox;
+        return imgX >= bx && imgX <= bx + bw && imgY >= by && imgY <= by + bh;
+      });
+      if (hitIdx !== -1) {
+        setSegments((prev) => prev.filter((_, i) => i !== hitIdx));
+        return;
+      }
+
+      // New point: run SAM segmentation
+      segmentAbortRef.current?.abort();
+      const ac = new AbortController();
+      segmentAbortRef.current = ac;
+      setIsSegmenting(true);
+
+      try {
+        const result: SegmentPointResponse = await segmentPoint(
+          { scene_id: sceneId, x: imgX, y: imgY },
+          ac.signal
+        );
+        const displayImage = await colorizeSegmentMask(result.mask_url);
+        setSegments((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            maskUrl: result.mask_url,
+            displayImage,
+            bbox: result.bbox,
+            score: result.score,
+          },
+        ]);
+      } catch (err: unknown) {
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          setCleanPhase("error");
+          setCleanError(toUserMessage(err));
+        }
+      } finally {
+        setIsSegmenting(false);
+      }
+    },
+    [roomImage, roomOffsetX, roomOffsetY, scale, segments, sceneId]
+  );
+
+  const handleClean = useCallback(async () => {
+    if (!roomImage || segments.length === 0) return;
+
+    const ac = new AbortController();
+    cleanAbortRef.current = ac;
+    setCleanPhase("cleaning");
+    setCleanError(null);
+
+    try {
+      // Union all segment masks with "screen" compositing (lightest wins, giving OR of B/W masks).
+      const { naturalWidth: w, naturalHeight: h } = roomImage;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas-not-supported");
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "screen";
+      for (const seg of segments) {
+        const maskImg = await loadImage(seg.maskUrl);
+        ctx.drawImage(maskImg, 0, 0, w, h);
+      }
+      // Binarize: drawImage scaling can introduce intermediate gray values via
+      // bilinear interpolation; threshold to strict 0/255 before sending to backend.
+      ctx.globalCompositeOperation = "source-over";
+      const id = ctx.getImageData(0, 0, w, h);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = d[i] > 128 ? 255 : 0;
+        d[i] = v;
+        d[i + 1] = v;
+        d[i + 2] = v;
+        d[i + 3] = 255;
+      }
+      ctx.putImageData(id, 0, 0);
+      const maskDataUrl = canvas.toDataURL("image/png");
+
+      const result = await cleanScene({ scene_id: sceneId, mask: maskDataUrl }, ac.signal);
+      setCleanPhase("idle");
+      setSegments([]);
+      onSceneCleaned?.(result.cleaned_scene_id, result.cleaned_url);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setCleanPhase("idle");
+      } else {
+        const msg = toUserMessage(err);
+        setCleanPhase("error");
+        setCleanError(msg);
+      }
+    }
+  }, [roomImage, segments, sceneId, onSceneCleaned]);
 
   const handleRender = useCallback(async () => {
     if (!falKeyConfigured) {
@@ -731,7 +948,7 @@ export function PlacementCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 overflow-hidden bg-gray-900 outline-none"
+      className={`relative flex-1 overflow-hidden bg-gray-900 outline-none ${canvasMode === "erase" ? (isSegmenting ? "cursor-wait" : "cursor-crosshair") : ""}`}
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       aria-label="Placement canvas"
@@ -743,11 +960,15 @@ export function PlacementCanvas({
         width={stageSize.width}
         height={stageSize.height}
         onClick={(e) => {
+          const pos = stageRef.current?.getPointerPosition();
+          if (canvasMode === "erase") {
+            if (pos && !isSegmenting) void handleEraseClick(pos.x, pos.y);
+            return;
+          }
           const target = e.target as Konva.Node;
           const isBackground =
             typeof target.getStage === "function" && target === target.getStage();
           if (pendingObjectId && isBackground) {
-            const pos = stageRef.current?.getPointerPosition();
             if (pos) void handleClickPlace(pos.x, pos.y);
           } else if (isBackground) {
             setSelectedId(null);
@@ -779,13 +1000,17 @@ export function PlacementCanvas({
                 scaleX={p.scale_x}
                 scaleY={p.scale_y}
                 rotation={p.rotation}
-                draggable
+                opacity={canvasMode === "erase" ? ERASE_OBJECT_OPACITY : 1}
+                draggable={canvasMode === "place"}
+                listening={canvasMode === "place"}
                 onClick={() => {
+                  if (canvasMode === "erase") return;
                   setSelectedId(p.id);
                   setContextMenu(null);
                   containerRef.current?.focus();
                 }}
                 onContextMenu={(e) => {
+                  if (canvasMode === "erase") return;
                   e.evt.preventDefault();
                   setSelectedId(p.id);
                   containerRef.current?.focus();
@@ -814,18 +1039,116 @@ export function PlacementCanvas({
             ref={trRef}
             rotateEnabled
             keepRatio={false}
+            visible={canvasMode === "place"}
             boundBoxFunc={(oldBox, newBox) =>
               newBox.width < 10 || newBox.height < 10 ? oldBox : newBox
             }
           />
         </Layer>
+
+        {/* Erase mode — colorized segment overlays */}
+        {canvasMode === "erase" && segments.length > 0 && (
+          <Layer listening={false}>
+            {segments.map((seg) =>
+              seg.displayImage ? (
+                <KonvaImage
+                  key={seg.id}
+                  image={seg.displayImage}
+                  x={roomOffsetX}
+                  y={roomOffsetY}
+                  width={roomRenderW}
+                  height={roomRenderH}
+                />
+              ) : null
+            )}
+          </Layer>
+        )}
       </Stage>
 
-      {/* Pending placement hint */}
-      {pendingObjectId && (
+      {/* Erase mode — keyboard-accessible deselect buttons positioned over each segment bbox */}
+      {canvasMode === "erase" && segments.length > 0 && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-label="Selected segments"
+          role="group"
+        >
+          {segments.map((seg, i) => {
+            const [bx, by, bw, bh] = seg.bbox;
+            return (
+              <button
+                key={seg.id}
+                type="button"
+                aria-label={`Selected region ${i + 1}, click to deselect`}
+                onClick={() => setSegments((prev) => prev.filter((s) => s.id !== seg.id))}
+                className="pointer-events-auto absolute opacity-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                style={{
+                  left: roomOffsetX + bx * scale,
+                  top: roomOffsetY + by * scale,
+                  width: bw * scale,
+                  height: bh * scale,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Canvas mode toolbar — always visible */}
+      <CanvasToolbar
+        mode={canvasMode}
+        onModeChange={handleModeChange}
+        segmentCount={segments.length}
+        isSegmenting={isSegmenting}
+        isCleaning={cleanPhase === "cleaning"}
+        onClean={() => void handleClean()}
+      />
+
+      {/* Pending placement hint — only in place mode */}
+      {pendingObjectId && canvasMode === "place" && (
         <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
           <div className="rounded-full bg-brand-accent/90 px-4 py-1.5 text-xs font-medium text-white shadow backdrop-blur-sm">
             Click on the photo to place the object
+          </div>
+        </div>
+      )}
+
+      {/* Erase mode hint — hidden when cleaned variant pill occupies the same slot */}
+      {canvasMode === "erase" && segments.length === 0 && !cleanedVariant && (
+        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
+          <div className="rounded-full bg-black/70 px-4 py-1.5 text-xs font-medium text-white shadow backdrop-blur-sm">
+            Click any object to select it for removal
+          </div>
+        </div>
+      )}
+
+      {/* "Use cleaned scene" pill — appears after a successful clean */}
+      {cleanedVariant && !isShowingCleanedScene && (
+        <div className="absolute inset-x-0 top-14 z-10 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-green-600/90 px-4 py-1.5 text-xs font-medium text-white shadow backdrop-blur-sm">
+            <span>Scene cleaned</span>
+            <button
+              type="button"
+              onClick={onUseCleanedScene}
+              className="rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-green-700 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              Use cleaned scene
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* "Restore original" affordance — visible when showing the cleaned variant */}
+      {isShowingCleanedScene && onRestoreOriginal && (
+        <div className="absolute inset-x-0 top-14 z-10 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-black/70 px-4 py-1.5 text-xs font-medium text-white shadow backdrop-blur-sm">
+            <span>Showing cleaned scene</span>
+            <button
+              type="button"
+              onClick={onRestoreOriginal}
+              className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              Restore original
+            </button>
           </div>
         </div>
       )}
@@ -836,10 +1159,12 @@ export function PlacementCanvas({
         {previewPhase === "generating" && placements.length > 0 && "Generating preview"}
         {previewPhase === "ready" && placements.length > 0 && "Preview ready"}
         {previewPhase === "error" && placements.length > 0 && "Preview unavailable"}
+        {isSegmenting && "Segmenting object, please wait"}
+        {cleanPhase === "cleaning" && "Cleaning scene, please wait"}
       </div>
 
-      {/* Preview status badge — top-left corner; hidden when no placements */}
-      {previewPhase !== "idle" && placements.length > 0 && (
+      {/* Preview status badge — top-left corner; hidden when no placements or in erase mode */}
+      {previewPhase !== "idle" && placements.length > 0 && canvasMode === "place" && (
         <div className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
           {previewPhase === "pending" || previewPhase === "generating" ? (
             <>
@@ -863,8 +1188,9 @@ export function PlacementCanvas({
         </div>
       )}
 
-      {/* Depth hint slider for selected placement */}
-      {selectedId &&
+      {/* Depth hint slider for selected placement — place mode only */}
+      {canvasMode === "place" &&
+        selectedId &&
         (() => {
           const p = placements.find((pl) => pl.id === selectedId);
           if (!p) return null;
@@ -896,8 +1222,9 @@ export function PlacementCanvas({
           );
         })()}
 
-      {/* Floating selection toolbar — appears above the selected object */}
-      {selectedId &&
+      {/* Floating selection toolbar — appears above the selected object, place mode only */}
+      {canvasMode === "place" &&
+        selectedId &&
         (() => {
           const p = placements.find((pl) => pl.id === selectedId);
           if (!p) return null;
@@ -982,9 +1309,8 @@ export function PlacementCanvas({
         </div>
       )}
 
-      {/* Render button — bottom-right, hidden when an object is selected (avoids conflict
-          with the Konva Transformer handles and the depth slider) */}
-      {placements.length > 0 && renderPhase === "idle" && !selectedId && (
+      {/* Render button — bottom-right; hidden in erase mode or when an object is selected */}
+      {canvasMode === "place" && placements.length > 0 && renderPhase === "idle" && !selectedId && (
         <div className="absolute bottom-4 right-4 z-10">
           <button
             type="button"
@@ -1057,6 +1383,38 @@ export function PlacementCanvas({
             ) : renderError.cta === "wait" ? (
               <span className="text-xs text-white/70">Wait a moment, then retry.</span>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Scene clean error overlay */}
+      {cleanPhase === "error" && cleanError && (
+        <div className="absolute bottom-4 right-4 z-10 flex max-w-sm flex-col items-start gap-2">
+          <div role="alert" className="rounded-lg bg-red-900/80 px-3 py-2 text-xs text-red-100">
+            <p className="font-semibold">{cleanError.title}</p>
+            <p className="mt-0.5 text-red-200">{cleanError.detail}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              ref={cleanErrorDismissRef}
+              type="button"
+              onClick={() => {
+                setCleanPhase("idle");
+                setCleanError(null);
+              }}
+              className="rounded-md border border-white/40 px-2 py-1 text-xs text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              Dismiss
+            </button>
+            {cleanError.cta === "retry" && (
+              <button
+                type="button"
+                onClick={() => void handleClean()}
+                className="rounded-md bg-red-500 px-3 py-1 text-xs font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+              >
+                Retry
+              </button>
+            )}
           </div>
         </div>
       )}

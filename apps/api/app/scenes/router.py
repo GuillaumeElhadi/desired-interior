@@ -1,4 +1,5 @@
 import base64
+import io
 
 import structlog
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -22,7 +23,14 @@ from app.scenes.cleanup import (
     validate_mask,
 )
 from app.scenes.preprocessing import run_preprocessing
-from app.schemas import CleanSceneRequest, CleanSceneResponse, PreprocessResponse
+from app.scenes.segment import segment_point
+from app.schemas import (
+    CleanSceneRequest,
+    CleanSceneResponse,
+    PreprocessResponse,
+    SegmentPointRequest,
+    SegmentPointResponse,
+)
 from app.settings import get_settings
 
 _log = structlog.get_logger()
@@ -116,12 +124,14 @@ async def clean_scene(
     if cached is not None:
         return CleanSceneResponse(**cached)
 
-    # 4. Validate mask before calling fal (fast 422 on bad input)
-    validate_mask(
-        mask_bytes,
-        scene_preprocess["depth_map"]["width"],
-        scene_preprocess["depth_map"]["height"],
-    )
+    # 4. Validate mask before calling fal (fast 422 on bad input).
+    # Use the actual scene image dimensions, not the depth-map (which may be
+    # downsampled by the depth model). The frontend creates the mask at
+    # roomImage.naturalWidth × naturalHeight, which is the original image size.
+    from PIL import Image as _PILImage
+
+    _scene_w, _scene_h = _PILImage.open(io.BytesIO(scene_bytes)).size
+    validate_mask(mask_bytes, _scene_w, _scene_h)
 
     # 5. Run pipeline
     try:
@@ -145,3 +155,26 @@ async def clean_scene(
     )
     cleanup_cache.save_cached(cache_key, response.model_dump(), jpeg_bytes)
     return response
+
+
+@router.post("/segment-point", dependencies=[Depends(verify_ipc_token)])
+async def segment_point_endpoint(
+    body: SegmentPointRequest,
+    fal: AsyncFalClient = Depends(get_fal_client),
+) -> SegmentPointResponse:
+    scene_bytes = load_original(body.scene_id)
+    if scene_bytes is None:
+        raise AppError(
+            status_code=404,
+            error_code="scene_not_found",
+            message=f"Scene {body.scene_id!r} not found in cache.",
+        )
+
+    _log.info("segment_point_request", scene_id=body.scene_id, x=body.x, y=body.y)
+
+    try:
+        result = await segment_point(scene_bytes, body.x, body.y, fal)
+    except FalError as exc:
+        raise _fal_error_to_app_error(exc) from exc
+
+    return SegmentPointResponse(**result)
