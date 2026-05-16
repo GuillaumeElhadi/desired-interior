@@ -61,7 +61,7 @@ function App() {
   const [falKeyConfigured, setFalKeyConfigured] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [analyticsDecided, setAnalyticsDecided] = useState(true);
-  const [harmonizeStrength, setHarmonizeStrength] = useState(0.35);
+  const [harmonizeStrength, setHarmonizeStrength] = useState(0.38);
   const isOnline = useOnlineStatus();
 
   useEffect(() => {

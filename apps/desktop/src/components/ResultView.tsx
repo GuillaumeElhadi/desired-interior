@@ -3,7 +3,9 @@ import { toUserMessage, type UserMessage } from "../lib/errors";
 
 const STRENGTH_MIN = 0.15;
 const STRENGTH_MAX = 0.55;
-const STRENGTH_MID = 0.35; // real default ships after task 5.6 benchmarking
+// Benchmarked floor default from task 5.6 (docs/harmonizer_tuning.md).
+// Wall default (0.30) is applied server-side and can be exposed per-object in a future task.
+const STRENGTH_MID = 0.38;
 
 type HarmonizePhase =
   | { type: "idle" }

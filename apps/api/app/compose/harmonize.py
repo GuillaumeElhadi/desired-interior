@@ -11,6 +11,10 @@ Latency budget (documented, not enforced at runtime):
   - Flux Fill primary: p95 ≤ 25 s for 1024×1024
   - SDXL fallback:     p95 ≤ 15 s for 1024×1024
   - Cache hit:         < 50 ms
+
+Recommended defaults (from harmonizer_bench.py A/B grid — see docs/harmonizer_tuning.md):
+  - Wall objects:  DEFAULT_STRENGTH_WALL  = 0.30
+  - Floor objects: DEFAULT_STRENGTH_FLOOR = 0.38
 """
 
 import base64
@@ -37,6 +41,18 @@ _HARMONIZE_PROMPT = (
     "photorealistic interior, no new objects"
 )
 
+# Benchmarked defaults — produced by scripts/harmonizer_bench.py (see docs/harmonizer_tuning.md).
+# Wall objects need less blending (flatter integration plane, shallower shadow depth).
+# Floor objects need more blending for convincing perspective and ground-shadow integration.
+DEFAULT_STRENGTH_WALL: float = 0.30
+DEFAULT_STRENGTH_FLOOR: float = 0.38
+
+# ControlNet depth conditioning weight used when a depth map is available (Flux backend only).
+_CONTROLNET_DEFAULT_WEIGHT: float = 0.45
+
+# HuggingFace path for the FLUX.1-dev ControlNet Depth LoRA used by fal-ai/flux-pro/v1/fill.
+_CONTROLNET_DEPTH_PATH = "InstantX/FLUX.1-dev-Controlnet-Depth"
+
 
 def make_harmonize_cache_key(
     scene_id: str,
@@ -44,6 +60,7 @@ def make_harmonize_cache_key(
     backend: str,
     harmonize_strength: float,
     seed: int | None,
+    controlnet_weight: float = _CONTROLNET_DEFAULT_WEIGHT,
 ) -> str:
     """Stable cache key covering all inputs that affect the harmonized output."""
     sorted_objs = sorted(objects, key=lambda o: o.object_id)
@@ -54,7 +71,9 @@ def make_harmonize_cache_key(
         f"{o.placement.depth_hint:.4f}:{o.placement.rotation:.4f}"
         for o in sorted_objs
     )
-    parts = f"{scene_id}:{obj_parts}:{backend}:{harmonize_strength:.4f}:{seed}"
+    parts = (
+        f"{scene_id}:{obj_parts}:{backend}:{harmonize_strength:.4f}:{seed}:{controlnet_weight:.4f}"
+    )
     return hashlib.sha256(parts.encode()).hexdigest()
 
 
@@ -66,17 +85,21 @@ async def run_harmonize(
     seed: int | None,
     fal: AsyncFalClient,
     backend: str = "flux",
+    controlnet_weight: float = _CONTROLNET_DEFAULT_WEIGHT,
 ) -> dict[str, Any]:
     """Run the harmonization pipeline and return the result dict.
 
     Args:
         scene_image_bytes: Raw bytes of the original room JPEG.
         depth_map_url: HTTPS URL of the scene depth map (may be empty string).
+            When non-empty and backend="flux", used for ControlNet depth conditioning.
         objects: List of (object_url, surface_type, placement) tuples.
         harmonize_strength: Inpainting strength ∈ [0.15, 0.55].
         seed: Optional reproducibility seed.
         fal: Async fal.ai client.
         backend: "flux" (default) or "sdxl".
+        controlnet_weight: ControlNet depth conditioning scale (Flux only, ignored for SDXL).
+            Has no effect when depth_map_url is empty.
 
     Returns:
         {"url": <harmonized image URL>, "content_type": "image/jpeg"}
@@ -124,6 +147,17 @@ async def run_harmonize(
     if seed is not None:
         arguments["seed"] = seed
 
+    # Wire ControlNet depth conditioning when a depth map is available (Flux only).
+    # fal-ai/flux-pro/v1/fill accepts control_loras for ControlNet conditioning.
+    if depth_map_url and backend == "flux":
+        arguments["control_loras"] = [
+            {
+                "path": _CONTROLNET_DEPTH_PATH,
+                "conditioning_scale": controlnet_weight,
+            }
+        ]
+        arguments["controlnet_image_url"] = depth_map_url
+
     # 3. Select endpoint and call fal.ai
     endpoint = _FLUX_ENDPOINT if backend == "flux" else _SDXL_ENDPOINT
     _log.info(
@@ -131,6 +165,7 @@ async def run_harmonize(
         backend=backend,
         endpoint=endpoint,
         strength=harmonize_strength,
+        controlnet_weight=controlnet_weight if depth_map_url and backend == "flux" else None,
         num_objects=len(objects),
         has_depth_map=bool(depth_map_url),
     )

@@ -382,10 +382,10 @@ describe("ResultView — harmonize_strength slider", () => {
     expect(screen.getByLabelText(/^strength$/i)).toBeInTheDocument();
   });
 
-  it("slider starts at midpoint 0.35 when no initialStrength is given", () => {
+  it("slider starts at DEFAULT_STRENGTH_FLOOR (0.38) when no initialStrength is given", () => {
     render(<ResultView {...BASE_PROPS} onHarmonize={() => new Promise<string>(() => {})} />);
     const slider = screen.getByLabelText(/^strength$/i);
-    expect(Number((slider as HTMLInputElement).value)).toBeCloseTo(0.35);
+    expect(Number((slider as HTMLInputElement).value)).toBeCloseTo(0.38);
   });
 
   it("slider starts at initialStrength when provided", () => {
