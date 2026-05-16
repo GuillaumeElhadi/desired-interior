@@ -1,4 +1,5 @@
 import base64
+import io
 
 import structlog
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -123,12 +124,14 @@ async def clean_scene(
     if cached is not None:
         return CleanSceneResponse(**cached)
 
-    # 4. Validate mask before calling fal (fast 422 on bad input)
-    validate_mask(
-        mask_bytes,
-        scene_preprocess["depth_map"]["width"],
-        scene_preprocess["depth_map"]["height"],
-    )
+    # 4. Validate mask before calling fal (fast 422 on bad input).
+    # Use the actual scene image dimensions, not the depth-map (which may be
+    # downsampled by the depth model). The frontend creates the mask at
+    # roomImage.naturalWidth × naturalHeight, which is the original image size.
+    from PIL import Image as _PILImage
+
+    _scene_w, _scene_h = _PILImage.open(io.BytesIO(scene_bytes)).size
+    validate_mask(mask_bytes, _scene_w, _scene_h)
 
     # 5. Run pipeline
     try:

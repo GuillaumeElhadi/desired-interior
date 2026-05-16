@@ -164,6 +164,9 @@ function stubCanvasContext() {
     fillRect: vi.fn(),
     globalCompositeOperation: "",
     drawImage: vi.fn(),
+    // Return a fake ImageData so the binarization loop runs without throwing.
+    getImageData: vi.fn().mockReturnValue({ data: new Uint8ClampedArray(4) }),
+    putImageData: vi.fn(),
   };
   const origGetContext = HTMLCanvasElement.prototype.getContext;
   const origToDataURL = HTMLCanvasElement.prototype.toDataURL;

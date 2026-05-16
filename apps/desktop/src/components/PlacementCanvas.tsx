@@ -587,6 +587,19 @@ export function PlacementCanvas({
         const maskImg = await loadImage(seg.maskUrl);
         ctx.drawImage(maskImg, 0, 0, w, h);
       }
+      // Binarize: drawImage scaling can introduce intermediate gray values via
+      // bilinear interpolation; threshold to strict 0/255 before sending to backend.
+      ctx.globalCompositeOperation = "source-over";
+      const id = ctx.getImageData(0, 0, w, h);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = d[i] > 128 ? 255 : 0;
+        d[i] = v;
+        d[i + 1] = v;
+        d[i + 2] = v;
+        d[i + 3] = 255;
+      }
+      ctx.putImageData(id, 0, 0);
       const maskDataUrl = canvas.toDataURL("image/png");
 
       const result = await cleanScene({ scene_id: sceneId, mask: maskDataUrl }, ac.signal);
