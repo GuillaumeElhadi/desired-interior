@@ -193,6 +193,39 @@ class HarmonizeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Scene cleanup (task 5.8)
+# ---------------------------------------------------------------------------
+
+
+class CleanSceneRequest(BaseModel):
+    scene_id: str
+    # 30 MB base64 ceiling ≈ 22 MB decoded — covers 4K×4K binary PNG with headroom.
+    mask: Annotated[str, Field(max_length=30_000_000)]  # PNG data URL — white=erase, black=keep
+    prompt_hint: Annotated[
+        str | None,
+        Field(max_length=200, pattern=r"^[\w\s,\.\-'\"!?()]*$"),
+    ] = None
+
+    @field_validator("scene_id")
+    @classmethod
+    def validate_sha256_id(cls, v: str) -> str:
+        return _validate_sha256(v)
+
+    @field_validator("mask")
+    @classmethod
+    def validate_mask_data_url(cls, v: str) -> str:
+        if not v.startswith("data:image/png;base64,"):
+            raise ValueError("mask must be a PNG data URL (data:image/png;base64,...)")
+        return v
+
+
+class CleanSceneResponse(BaseModel):
+    cleaned_scene_id: str  # becomes a valid scene_id for /compose
+    cleaned_url: str  # JPEG data URL of the cleaned image
+    content_type: str = "image/jpeg"
+
+
+# ---------------------------------------------------------------------------
 # Settings (task 4.2)
 # ---------------------------------------------------------------------------
 

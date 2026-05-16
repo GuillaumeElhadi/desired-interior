@@ -28,16 +28,17 @@ The Tauri desktop shell communicates with the Python FastAPI sidecar over HTTP o
 
 ## HTTP endpoints
 
-| Method | Path                 | Description                                                                                                                                                                                                                                    | Request body                          | Response body / status          |
-| ------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------- |
-| `GET`  | `/health`            | Liveness probe. Response includes `{status, version, bg_removal_backend, harmonizer_backend}` where `bg_removal_backend` ∈ `{"birefnet","bria"}` and `harmonizer_backend` ∈ `{"flux","sdxl"}` (diagnostic fields, not in shared-types schema). | —                                     | `HealthResponse` (JSON)         |
-| `POST` | `/logs`              | Receive frontend logs                                                                                                                                                                                                                          | `LogRequest` (JSON)                   | `204 No Content`                |
-| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                                                                                                                                                                                     | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
-| `POST` | `/objects/extract`   | Object background removal                                                                                                                                                                                                                      | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
-| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)                                                                                                                                                              | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
-| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only                                                                                                                                                            | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
-| `POST` | `/settings`          | Hot-reload runtime settings                                                                                                                                                                                                                    | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
-| `POST` | `/compose/harmonize` | Generative harmonisation pass — Flux Fill img2img + ControlNet Depth (primary) or SDXL img2img (fallback via `HARMONIZER_BACKEND=sdxl`). **Backend lands in task 5.4.**                                                                        | `HarmonizeRequest` (JSON)             | `HarmonizeResponse` (JSON)      |
+| Method | Path                 | Description                                                                                                                                                                                                                                                                                                                    | Request body                          | Response body / status          |
+| ------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | ------------------------------- |
+| `GET`  | `/health`            | Liveness probe. Response includes `{status, version, bg_removal_backend, harmonizer_backend}` where `bg_removal_backend` ∈ `{"birefnet","bria"}` and `harmonizer_backend` ∈ `{"flux","sdxl"}` (diagnostic fields, not in shared-types schema).                                                                                 | —                                     | `HealthResponse` (JSON)         |
+| `POST` | `/logs`              | Receive frontend logs                                                                                                                                                                                                                                                                                                          | `LogRequest` (JSON)                   | `204 No Content`                |
+| `POST` | `/scenes/preprocess` | Scene depth + segmentation                                                                                                                                                                                                                                                                                                     | `multipart/form-data` — field `image` | `PreprocessResponse` (JSON)     |
+| `POST` | `/objects/extract`   | Object background removal                                                                                                                                                                                                                                                                                                      | `multipart/form-data` — field `image` | `ExtractResponse` (JSON)        |
+| `POST` | `/compose/preview`   | Faithful object placement on the scene (local PIL alpha-composite — see ADR-0007)                                                                                                                                                                                                                                              | `ComposeRequest` (JSON)               | `PreviewComposeResponse` (JSON) |
+| `POST` | `/compose`           | Same composition path as `/compose/preview`; kept distinct for cache isolation only                                                                                                                                                                                                                                            | `ComposeRequest` (JSON)               | `ComposeResponse` (JSON)        |
+| `POST` | `/settings`          | Hot-reload runtime settings                                                                                                                                                                                                                                                                                                    | `UpdateSettingsRequest` (JSON)        | `UpdateSettingsResponse` (JSON) |
+| `POST` | `/compose/harmonize` | Generative harmonisation pass — Flux Fill img2img + ControlNet Depth (primary) or SDXL img2img (fallback via `HARMONIZER_BACKEND=sdxl`). **Backend lands in task 5.4.**                                                                                                                                                        | `HarmonizeRequest` (JSON)             | `HarmonizeResponse` (JSON)      |
+| `POST` | `/scenes/clean`      | Erase regions from the room photo via inpainting. LaMa primary (`SCENE_CLEAN_BACKEND=lama`, default); Flux Fill erase mode fallback (`SCENE_CLEAN_BACKEND=flux`). Returns a `cleaned_scene_id` that can be used in place of `scene_id` in subsequent `/compose` and `/compose/harmonize` calls. **Backend lands in task 5.8.** | `CleanSceneRequest` (JSON)            | `CleanSceneResponse` (JSON)     |
 
 All endpoints accept and return `application/json`. New endpoints added in `apps/api/app/` must be documented here and wrapped in `apps/desktop/src/lib/api.ts`.
 
@@ -170,6 +171,39 @@ The `image.url` is a `data:image/jpeg;base64,…` data URL. After receiving the 
 
 **Latency budget**: p95 ≤ 25 s for 1024×1024 on Flux Fill (primary), ≤ 15 s on SDXL (fallback). Cache hit on identical inputs (scene + objects + placements + backend + strength + seed) < 50 ms.
 
+### `CleanSceneRequest` / `CleanSceneResponse` schema
+
+```json
+// CleanSceneRequest
+{
+  "scene_id": "<SHA-256 returned by /scenes/preprocess or a prior /scenes/clean>",
+  "mask": "data:image/png;base64,<base64-encoded binary B/W PNG>",
+  "prompt_hint": "empty floor"
+}
+```
+
+- `scene_id` — 64-character lowercase hex SHA-256; must exist in the scenes cache (a prior call to `/scenes/preprocess` is required). Accepts a `cleaned_scene_id` from a previous cleanup call for chained cleaning.
+- `mask` — PNG data URL (`data:image/png;base64,...`). Must be strictly binary (pixel values 0 or 255 only), exactly the same resolution as the source scene, and cover ≤ 20% of total pixels. White = region to erase, black = keep. Maximum 30 MB base64 string (~22 MB decoded, covers 4K × 4K at 1 bit/px).
+- `prompt_hint` — optional context hint for the Flux fallback only (LaMa ignores it). Maximum 200 characters, restricted to `[\w\s,\.\-'"!?()]`. Omit for LaMa primary path.
+
+```json
+// CleanSceneResponse
+{
+  "cleaned_scene_id": "<SHA-256 cache key of (scene_sha, mask_sha, backend)>",
+  "cleaned_url": "data:image/jpeg;base64,<base64-encoded JPEG bytes>",
+  "content_type": "image/jpeg"
+}
+```
+
+- `cleaned_scene_id` — a valid `scene_id` for all subsequent `/compose` and `/compose/harmonize` calls. The cleaned image is stored in the scenes cache under this ID and inherits the original scene's depth map and segmentation masks.
+- `cleaned_url` — `data:image/jpeg;base64,…` data URL of the cleaned image; display directly in the UI.
+
+**Prerequisite**: `/scenes/preprocess` must have been called with the room image before `/scenes/clean`. Both the original bytes and the preprocessing result must be present in cache — a `409 Conflict` is returned if either is missing.
+
+**Latency budget**: p95 ≤ 8 s for 1024×1024 on LaMa (primary). Cache hit on identical inputs < 50 ms.
+
+**Backend selection**: `SCENE_CLEAN_BACKEND ∈ {"lama", "flux"}`, default `"lama"`. Surfaced in `GET /health` for diagnostics.
+
 ### Error response schema
 
 All error responses (HTTP 4xx/5xx raised by route handlers, plus unhandled 500s) return a structured JSON body:
@@ -187,19 +221,23 @@ Both `error` and `error_code` carry the same typed code (the duplicate exists fo
 
 **Typed error codes** (use `error_code` on the frontend for classification):
 
-| `error_code`             | HTTP status | Cause                                              |
-| ------------------------ | ----------- | -------------------------------------------------- |
-| `fal_key_missing`        | 503         | `FAL_KEY` not configured — direct user to Settings |
-| `fal_timeout`            | 504         | fal.ai call timed out — retry                      |
-| `fal_rate_limited`       | 429         | fal.ai rate limit — wait and retry                 |
-| `fal_error`              | 502         | Generic fal.ai error — retry                       |
-| `scene_not_found`        | 404         | Scene not in cache — re-upload room photo          |
-| `object_not_found`       | 404         | Object not in cache — re-upload object photo       |
-| `scene_original_missing` | 409         | Original image missing from cache — re-preprocess  |
-| `unsupported_media_type` | 415         | File format not accepted                           |
-| `empty_file`             | 400         | Zero-byte upload                                   |
-| `unauthorized`           | 401         | IPC token rejected — restart app                   |
-| `internal_server_error`  | 500         | Unhandled exception                                |
+| `error_code`               | HTTP status | Cause                                                  |
+| -------------------------- | ----------- | ------------------------------------------------------ |
+| `fal_key_missing`          | 503         | `FAL_KEY` not configured — direct user to Settings     |
+| `fal_timeout`              | 504         | fal.ai call timed out — retry                          |
+| `fal_rate_limited`         | 429         | fal.ai rate limit — wait and retry                     |
+| `fal_error`                | 502         | Generic fal.ai error — retry                           |
+| `scene_not_found`          | 404         | Scene not in cache — re-upload room photo              |
+| `object_not_found`         | 404         | Object not in cache — re-upload object photo           |
+| `scene_original_missing`   | 409         | Original image missing from cache — re-preprocess      |
+| `scene_preprocess_missing` | 409         | Preprocessing result missing for scene — re-preprocess |
+| `mask_resolution_mismatch` | 422         | Mask dimensions do not match the scene resolution      |
+| `mask_not_binary`          | 422         | Mask contains pixels other than 0 or 255               |
+| `mask_coverage_exceeded`   | 422         | Mask covers more than 20% of the scene pixels          |
+| `unsupported_media_type`   | 415         | File format not accepted                               |
+| `empty_file`               | 400         | Zero-byte upload                                       |
+| `unauthorized`             | 401         | IPC token rejected — restart app                       |
+| `internal_server_error`    | 500         | Unhandled exception                                    |
 
 ## Security model
 

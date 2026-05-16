@@ -551,7 +551,7 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.8 Scene cleanup endpoint — inpainting-based erase (Scene cleanup track)
 
-- [ ] Branch: `feat/scene-clean-endpoint`
+- [x] Branch: `feat/scene-clean-endpoint`
 - New endpoint `POST /scenes/clean`. Request body: `scene_id`, a binary B/W `mask` (PNG data URL — white = pixels to erase, black = keep), optional `prompt_hint` for the inpainter's context (e.g., "empty floor", "blank wall"). Pipeline:
   1. Fetch the scene image from the scenes cache (no re-upload required).
   2. **Primary path** — call `AsyncFalClient.run("fal-ai/lama", ...)` (LaMa inpainting — fast, deterministic, designed for object removal; no prompt steering, hallucination-free).
@@ -561,12 +561,12 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
   6. All fal.ai calls go through `app/cloud/fal_client.py` — `architecture-keeper` must pass.
 - **Files:** `apps/api/app/scenes/cleanup.py` (new), `apps/api/app/scenes/router.py`, `apps/api/app/schemas.py`, `apps/api/tests/test_scene_cleanup.py` (new), `packages/shared-types/` (regenerated).
 - **Acceptance:**
-  - [ ] Mocked LaMa response → endpoint returns `{cleaned_scene_id, cleaned_url, content_type}`
-  - [ ] Mask validation rejects: wrong-resolution, non-binary, > 20% coverage, missing
-  - [ ] Cache hit on identical inputs is < 50 ms; miss path observed in tests
-  - [ ] Timeout / rate-limit / malformed-response paths covered
-  - [ ] Latency budget: p95 ≤ 8 s for 1024×1024 on LaMa
-  - [ ] No fal SDK import outside `app/cloud/`
+  - [x] Mocked LaMa response → endpoint returns `{cleaned_scene_id, cleaned_url, content_type}`
+  - [x] Mask validation rejects: wrong-resolution, non-binary, > 20% coverage, missing
+  - [x] Cache hit on identical inputs is < 50 ms; miss path observed in tests
+  - [x] Timeout / rate-limit / malformed-response paths covered
+  - [x] Latency budget: p95 ≤ 8 s for 1024×1024 on LaMa
+  - [x] No fal SDK import outside `app/cloud/`
 
 ### 5.9 Canvas "remove existing decor" mode (Scene cleanup track)
 
