@@ -38,6 +38,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/scenes/segment-point": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Segment Point Endpoint */
+    post: operations["segment_point_endpoint_scenes_segment_point_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/objects/extract": {
     parameters: {
       query?: never;
@@ -417,6 +434,24 @@ export interface components {
       /** Color Temperature */
       color_temperature: string;
     };
+    /** SegmentPointRequest */
+    SegmentPointRequest: {
+      /** Scene Id */
+      scene_id: string;
+      /** X */
+      x: number;
+      /** Y */
+      y: number;
+    };
+    /** SegmentPointResponse */
+    SegmentPointResponse: {
+      /** Mask Url */
+      mask_url: string;
+      /** Bbox */
+      bbox: number[];
+      /** Score */
+      score: number;
+    };
     /** StyleHints */
     StyleHints: {
       /**
@@ -514,6 +549,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CleanSceneResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  segment_point_endpoint_scenes_segment_point_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SegmentPointRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SegmentPointResponse"];
         };
       };
       /** @description Validation Error */

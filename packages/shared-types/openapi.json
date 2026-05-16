@@ -119,6 +119,63 @@
         }
       }
     },
+    "/scenes/segment-point": {
+      "post": {
+        "tags": ["scenes"],
+        "summary": "Segment Point Endpoint",
+        "operationId": "segment_point_endpoint_scenes_segment_point_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SegmentPointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentPointResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/objects/extract": {
       "post": {
         "tags": ["objects"],
@@ -995,6 +1052,49 @@
         "type": "object",
         "required": ["dominant_surface", "lighting_hint", "light_direction", "color_temperature"],
         "title": "SceneMetadata"
+      },
+      "SegmentPointRequest": {
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "title": "Scene Id"
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "X"
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": ["scene_id", "x", "y"],
+        "title": "SegmentPointRequest"
+      },
+      "SegmentPointResponse": {
+        "properties": {
+          "mask_url": {
+            "type": "string",
+            "title": "Mask Url"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": ["mask_url", "bbox", "score"],
+        "title": "SegmentPointResponse"
       },
       "StyleHints": {
         "properties": {

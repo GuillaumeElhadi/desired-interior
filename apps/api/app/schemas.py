@@ -226,6 +226,28 @@ class CleanSceneResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Scene point segmentation (task 5.9 point-based erase)
+# ---------------------------------------------------------------------------
+
+
+class SegmentPointRequest(BaseModel):
+    scene_id: str
+    x: Annotated[int, Field(ge=0)]  # pixel coordinate in original image
+    y: Annotated[int, Field(ge=0)]
+
+    @field_validator("scene_id")
+    @classmethod
+    def validate_sha256_id(cls, v: str) -> str:
+        return _validate_sha256(v)
+
+
+class SegmentPointResponse(BaseModel):
+    mask_url: str  # binary B/W PNG data URL (white=object, black=background)
+    bbox: list[float]  # [x, y, w, h] in image pixels
+    score: float
+
+
+# ---------------------------------------------------------------------------
 # Settings (task 4.2)
 # ---------------------------------------------------------------------------
 

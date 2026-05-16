@@ -2,18 +2,32 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlacementCanvas } from "../components/PlacementCanvas";
 import * as api from "../lib/api";
-import type { CleanSceneResponse } from "../lib/api";
+import type { CleanSceneResponse, SegmentPointResponse } from "../lib/api";
 import * as db from "../lib/db";
 
 vi.mock("konva", () => ({ default: {} }));
+// Fixed pointer position used by the Stage mock for erase-click tests.
+// With room image 100×100, stage 800×600: scale=6, offsets=(100,0).
+// imgX = round((200-100)/6) = 17, imgY = round((150-0)/6) = 25.
+const MOCK_STAGE_POINTER = { x: 200, y: 150 };
+
 vi.mock("react-konva", async () => {
-  const { forwardRef } = await import("react");
+  const { forwardRef, useImperativeHandle } = await import("react");
   return {
-    Stage: forwardRef(({ children, ...p }: React.ComponentProps<"div">) => (
-      <div data-testid="konva-stage" {...p}>
-        {children}
-      </div>
-    )),
+    Stage: forwardRef(
+      ({ children, ...p }: React.ComponentProps<"div">, ref: React.Ref<unknown>) => {
+        useImperativeHandle(ref, () => ({
+          getPointerPosition: () => MOCK_STAGE_POINTER,
+          container: () => null,
+          findOne: () => null,
+        }));
+        return (
+          <div data-testid="konva-stage" {...p}>
+            {children}
+          </div>
+        );
+      }
+    ),
     Layer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
     Image: ({
       id,
@@ -72,6 +86,7 @@ vi.mock("../lib/api", () => ({
   compose: vi.fn(),
   composePreview: vi.fn(),
   cleanScene: vi.fn(),
+  segmentPoint: vi.fn(),
 }));
 
 const SCENE_ID = "a".repeat(64);
@@ -141,6 +156,28 @@ function mockImageAutoLoad() {
     });
     return img as HTMLImageElement;
   } as unknown as typeof Image);
+}
+
+function stubCanvasContext() {
+  const mockCtx = {
+    fillStyle: "",
+    fillRect: vi.fn(),
+    globalCompositeOperation: "",
+    drawImage: vi.fn(),
+  };
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+  HTMLCanvasElement.prototype.getContext = vi
+    .fn()
+    .mockReturnValue(mockCtx) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue("data:image/png;base64,dGVzdA==");
+  return {
+    mockCtx,
+    restore() {
+      HTMLCanvasElement.prototype.getContext = origGetContext;
+      HTMLCanvasElement.prototype.toDataURL = origToDataURL;
+    },
+  };
 }
 
 beforeEach(() => {
@@ -552,90 +589,33 @@ describe("PlacementCanvas — duplication", () => {
   });
 });
 
-describe("PlacementCanvas — erase mode", () => {
-  // Small-area masks: each < 20% of the 100×100 mock image (10000px → 20% = 2000px)
-  const MASKS_SMALL = [
-    {
-      url: "",
-      label: "floor",
-      score: 0.9,
-      area: 800,
-      bbox: [0, 300, 200, 200],
-      surface_type: "floor",
-    },
-    {
-      url: "",
-      label: "wall",
-      score: 0.8,
-      area: 900,
-      bbox: [200, 0, 400, 300],
-      surface_type: "wall",
-    },
-  ];
+describe("PlacementCanvas — erase mode (point-based)", () => {
+  // With room image 100×100, stage 800×600: scale=6, offsets=(100,0).
+  // MOCK_STAGE_POINTER {x:200, y:150} → imgX=round((200-100)/6)=17, imgY=round(150/6)=25.
+  const EXPECTED_IMG_X = 17;
+  const EXPECTED_IMG_Y = 25;
 
-  // Large-area masks: combined area exceeds 20% of 10000px = 2000px
-  const MASKS_LARGE = [
-    {
-      url: "",
-      label: "floor",
-      score: 0.9,
-      area: 1800,
-      bbox: [0, 300, 200, 200],
-      surface_type: "floor",
-    },
-    {
-      url: "",
-      label: "wall",
-      score: 0.8,
-      area: 1800,
-      bbox: [200, 0, 400, 300],
-      surface_type: "wall",
-    },
-  ];
-
-  const PROPS_WITH_MASKS = {
-    ...DEFAULT_PROPS,
-    masks: MASKS_SMALL,
+  // Segment returned by the mock: bbox=[10,20,20,20] — contains (17,25) for deselect tests.
+  const MOCK_SEGMENT: SegmentPointResponse = {
+    mask_url: "data:image/png;base64,dGVzdA==",
+    bbox: [10, 20, 20, 20],
+    score: 0.9,
   };
 
   const CLEAN_RESPONSE: CleanSceneResponse = {
     cleaned_scene_id: "c".repeat(64),
-    cleaned_url: "https://cdn.fal.ai/cleaned.jpg",
+    cleaned_url: "data:image/jpeg;base64,/9j/cleaned",
     content_type: "image/jpeg",
   };
 
-  function stubCanvasContext() {
-    const mockCtx = {
-      fillStyle: "",
-      fillRect: vi.fn(),
-    };
-    const origGetContext = HTMLCanvasElement.prototype.getContext;
-    const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
-    // jsdom has no canvas rendering — override prototype methods so handleClean
-    // can build the mask data URL without throwing.
-    HTMLCanvasElement.prototype.getContext = vi
-      .fn()
-      .mockReturnValue(mockCtx) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.toDataURL = vi
-      .fn()
-      .mockReturnValue("data:image/png;base64,dGVzdA==");
-    return {
-      mockCtx,
-      restore() {
-        HTMLCanvasElement.prototype.getContext = origGetContext;
-        HTMLCanvasElement.prototype.toDataURL = origToDataURL;
-      },
-    };
-  }
-
   it("toolbar renders Place and Erase buttons by default", () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
     expect(screen.getByRole("button", { name: /^place$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^erase$/i })).toBeInTheDocument();
   });
 
   it("Place button is pressed by default, Erase is not", () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
     expect(screen.getByRole("button", { name: /^place$/i })).toHaveAttribute(
       "aria-pressed",
       "true"
@@ -646,84 +626,109 @@ describe("PlacementCanvas — erase mode", () => {
     );
   });
 
-  it("clicking Erase sets mode and shows the erase hint", async () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+  it("clicking Erase shows cursor-crosshair and erase hint", async () => {
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
     await waitFor(() => {
-      expect(screen.getByText(/click a region to select/i)).toBeInTheDocument();
+      expect(screen.getByText(/click any object/i)).toBeInTheDocument();
     });
   });
 
   it("objects fade to 40% opacity in erase mode", async () => {
     vi.mocked(db.loadPlacements).mockResolvedValue([MOCK_PLACEMENT]);
     vi.mocked(db.loadObjects).mockResolvedValue([MOCK_OBJECT]);
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
     await screen.findByTestId(`node-${PLACEMENT_ID}`);
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
     await waitFor(() => {
-      const node = screen.getByTestId(`node-${PLACEMENT_ID}`);
-      expect(node).toHaveAttribute("data-opacity", "0.4");
+      expect(screen.getByTestId(`node-${PLACEMENT_ID}`)).toHaveAttribute("data-opacity", "0.4");
     });
   });
 
-  it("clicking a mask rect toggles its selection and updates Clean button count", async () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+  it("clicking stage in erase mode calls segmentPoint with image coords", async () => {
+    vi.mocked(api.segmentPoint).mockResolvedValue(MOCK_SEGMENT);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId("room-image");
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    fireEvent.click(screen.getByTestId("konva-stage"));
+    await waitFor(() => {
+      expect(api.segmentPoint).toHaveBeenCalledWith(
+        { scene_id: SCENE_ID, x: EXPECTED_IMG_X, y: EXPECTED_IMG_Y },
+        expect.any(AbortSignal)
+      );
+    });
+  });
 
-    const rects = await screen.findAllByTestId("mask-rect");
-    expect(rects.length).toBeGreaterThan(0);
-
-    fireEvent.click(rects[0]);
+  it("segment count increments in toolbar after successful segmentPoint", async () => {
+    vi.mocked(api.segmentPoint).mockResolvedValue(MOCK_SEGMENT);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId("room-image");
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    fireEvent.click(screen.getByTestId("konva-stage"));
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1");
     });
+  });
 
-    fireEvent.click(rects[0]);
+  it("second click within segment bbox deselects the segment", async () => {
+    vi.mocked(api.segmentPoint).mockResolvedValue(MOCK_SEGMENT);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId("room-image");
+    fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    // First click: adds segment
+    fireEvent.click(screen.getByTestId("konva-stage"));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1");
+    });
+    // Second click: same coords, within bbox → deselect
+    fireEvent.click(screen.getByTestId("konva-stage"));
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /clean/i })).not.toHaveTextContent("1");
     });
+    // segmentPoint should only have been called once (first click)
+    expect(api.segmentPoint).toHaveBeenCalledTimes(1);
   });
 
-  it("Clean button is disabled when no mask is selected", async () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+  it("toolbar shows Selecting… while segmentPoint is in flight", async () => {
+    vi.mocked(api.segmentPoint).mockReturnValue(new Promise(() => {})); // never resolves
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId("room-image");
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
+    fireEvent.click(screen.getByTestId("konva-stage"));
+    // When isSegmenting=true the button text changes to "Selecting…" — query by current text.
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /clean/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /selecting/i })).toBeInTheDocument();
     });
   });
 
-  it("Clean button is disabled when selection exceeds 20% coverage", async () => {
-    // Both MASKS_LARGE have area=1800; combined = 3600 / 10000 = 36% > 20% rail.
-    render(<PlacementCanvas {...DEFAULT_PROPS} masks={MASKS_LARGE} />);
+  it("segmentPoint error shows clean error overlay", async () => {
+    vi.mocked(api.segmentPoint).mockRejectedValue(new Error("SAM failed: 502"));
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId("room-image");
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
-
-    const rects = await screen.findAllByTestId("mask-rect");
-    fireEvent.click(rects[0]);
-    fireEvent.click(rects[1]);
-
+    fireEvent.click(screen.getByTestId("konva-stage"));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /clean/i })).toBeDisabled();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
-    expect(screen.getByTitle(/deselect some regions/i)).toBeInTheDocument();
   });
 
   it("Clean calls cleanScene and fires onSceneCleaned on success", async () => {
     const { restore } = stubCanvasContext();
+    vi.mocked(api.segmentPoint).mockResolvedValue(MOCK_SEGMENT);
     vi.mocked(api.cleanScene).mockResolvedValue(CLEAN_RESPONSE);
 
     const onSceneCleaned = vi.fn();
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} onSceneCleaned={onSceneCleaned} />);
-    // Wait for roomImage to load — the KonvaImage mock only renders once roomImage is non-null.
+    render(<PlacementCanvas {...DEFAULT_PROPS} onSceneCleaned={onSceneCleaned} />);
     await screen.findByTestId("room-image");
-
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
 
-    const rects = await screen.findAllByTestId("mask-rect");
-    fireEvent.click(rects[0]);
+    // Add a segment
+    fireEvent.click(screen.getByTestId("konva-stage"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1")
+    );
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /clean/i })).not.toBeDisabled();
-    });
+    // Click Clean
     fireEvent.click(screen.getByRole("button", { name: /clean/i }));
 
     await waitFor(() => {
@@ -741,17 +746,17 @@ describe("PlacementCanvas — erase mode", () => {
 
   it("Clean error shows an error alert overlay", async () => {
     const { restore } = stubCanvasContext();
+    vi.mocked(api.segmentPoint).mockResolvedValue(MOCK_SEGMENT);
     vi.mocked(api.cleanScene).mockRejectedValue(new Error("lama failed: 502"));
 
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
     await screen.findByTestId("room-image");
-
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
 
-    const rects = await screen.findAllByTestId("mask-rect");
-    fireEvent.click(rects[0]);
-
-    await waitFor(() => expect(screen.getByRole("button", { name: /clean/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("konva-stage"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1")
+    );
     fireEvent.click(screen.getByRole("button", { name: /clean/i }));
 
     await waitFor(() => {
@@ -760,10 +765,10 @@ describe("PlacementCanvas — erase mode", () => {
     restore();
   });
 
-  it("'Use cleaned scene' pill is visible when cleanedVariant prop is set", async () => {
+  it("'Use cleaned scene' pill is visible when cleanedVariant prop is set", () => {
     render(
       <PlacementCanvas
-        {...PROPS_WITH_MASKS}
+        {...DEFAULT_PROPS}
         cleanedVariant={{ sceneId: "x".repeat(64), imageUrl: "blob:cleaned" }}
         isShowingCleanedScene={false}
       />
@@ -771,10 +776,10 @@ describe("PlacementCanvas — erase mode", () => {
     expect(screen.getByRole("button", { name: /use cleaned scene/i })).toBeInTheDocument();
   });
 
-  it("'Restore original' pill is visible when isShowingCleanedScene is true", async () => {
+  it("'Restore original' pill is visible when isShowingCleanedScene is true", () => {
     render(
       <PlacementCanvas
-        {...PROPS_WITH_MASKS}
+        {...DEFAULT_PROPS}
         cleanedVariant={{ sceneId: "x".repeat(64), imageUrl: "blob:cleaned" }}
         isShowingCleanedScene={true}
         onRestoreOriginal={vi.fn()}
@@ -784,7 +789,7 @@ describe("PlacementCanvas — erase mode", () => {
   });
 
   it("E key toggles between Place and Erase mode", async () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
     fireEvent.keyDown(window, { key: "e" });
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^erase$/i })).toHaveAttribute(
@@ -801,14 +806,17 @@ describe("PlacementCanvas — erase mode", () => {
     });
   });
 
-  it("Escape in erase mode deselects all mask regions", async () => {
-    render(<PlacementCanvas {...PROPS_WITH_MASKS} />);
+  it("Escape in erase mode clears all segments", async () => {
+    vi.mocked(api.segmentPoint).mockResolvedValue(MOCK_SEGMENT);
+    render(<PlacementCanvas {...DEFAULT_PROPS} />);
+    await screen.findByTestId("room-image");
     fireEvent.click(screen.getByRole("button", { name: /^erase$/i }));
-    const rects = await screen.findAllByTestId("mask-rect");
-    fireEvent.click(rects[0]);
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1");
-    });
+
+    fireEvent.click(screen.getByTestId("konva-stage"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /clean/i })).toHaveTextContent("1")
+    );
+
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /clean/i })).not.toHaveTextContent("1");

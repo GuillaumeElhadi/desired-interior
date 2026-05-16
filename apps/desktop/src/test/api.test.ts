@@ -13,6 +13,7 @@ import {
   harmonize,
   postLog,
   preprocessScene,
+  segmentPoint,
 } from "../lib/api";
 
 const mockInvoke = vi.mocked(invoke);
@@ -594,6 +595,97 @@ describe("cleanScene", () => {
     await expect(cleanScene(CLEAN_REQUEST)).rejects.toMatchObject({
       errorCode: "mask_coverage_exceeded",
       httpStatus: 422,
+    });
+  });
+});
+
+describe("segmentPoint", () => {
+  const SEGMENT_REQUEST = {
+    scene_id: "a".repeat(64),
+    x: 100,
+    y: 80,
+  };
+
+  const SEGMENT_RESPONSE = {
+    mask_url: "data:image/png;base64,dGVzdA==",
+    bbox: [52.0, 44.8, 102.4, 76.8],
+    score: 0.92,
+  };
+
+  it("POSTs JSON to /scenes/segment-point with auth header and returns parsed body", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SEGMENT_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await segmentPoint(SEGMENT_REQUEST);
+
+    expect(result).toEqual(SEGMENT_RESPONSE);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:9999/scenes/segment-point",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(SEGMENT_REQUEST),
+      })
+    );
+  });
+
+  it("threads AbortSignal through to fetch", async () => {
+    setupInvokeMocks();
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(SEGMENT_RESPONSE),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const ac = new AbortController();
+    await segmentPoint(SEGMENT_REQUEST, ac.signal);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: ac.signal })
+    );
+  });
+
+  it("throws ApiError with fal_timeout on 504", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(504, "Gateway Timeout", {
+          error_code: "fal_timeout",
+          message: "timed out",
+          request_id: "r14",
+        })
+      )
+    );
+    await expect(segmentPoint(SEGMENT_REQUEST)).rejects.toBeInstanceOf(ApiError);
+    await expect(segmentPoint(SEGMENT_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_timeout",
+      httpStatus: 504,
+    });
+  });
+
+  it("throws ApiError with fal_rate_limited on 429", async () => {
+    setupInvokeMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        errorResponse(429, "Too Many Requests", {
+          error_code: "fal_rate_limited",
+          message: "slow down",
+          request_id: "r15",
+        })
+      )
+    );
+    await expect(segmentPoint(SEGMENT_REQUEST)).rejects.toMatchObject({
+      errorCode: "fal_rate_limited",
     });
   });
 });

@@ -22,7 +22,14 @@ from app.scenes.cleanup import (
     validate_mask,
 )
 from app.scenes.preprocessing import run_preprocessing
-from app.schemas import CleanSceneRequest, CleanSceneResponse, PreprocessResponse
+from app.scenes.segment import segment_point
+from app.schemas import (
+    CleanSceneRequest,
+    CleanSceneResponse,
+    PreprocessResponse,
+    SegmentPointRequest,
+    SegmentPointResponse,
+)
 from app.settings import get_settings
 
 _log = structlog.get_logger()
@@ -145,3 +152,26 @@ async def clean_scene(
     )
     cleanup_cache.save_cached(cache_key, response.model_dump(), jpeg_bytes)
     return response
+
+
+@router.post("/segment-point", dependencies=[Depends(verify_ipc_token)])
+async def segment_point_endpoint(
+    body: SegmentPointRequest,
+    fal: AsyncFalClient = Depends(get_fal_client),
+) -> SegmentPointResponse:
+    scene_bytes = load_original(body.scene_id)
+    if scene_bytes is None:
+        raise AppError(
+            status_code=404,
+            error_code="scene_not_found",
+            message=f"Scene {body.scene_id!r} not found in cache.",
+        )
+
+    _log.info("segment_point_request", scene_id=body.scene_id, x=body.x, y=body.y)
+
+    try:
+        result = await segment_point(scene_bytes, body.x, body.y, fal)
+    except FalError as exc:
+        raise _fal_error_to_app_error(exc) from exc
+
+    return SegmentPointResponse(**result)

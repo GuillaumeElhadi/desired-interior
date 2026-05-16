@@ -1,13 +1,15 @@
 import Konva from "konva";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from "react-konva";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
 import {
   type ComposeResponse,
   type ObjectPlacement,
   type PreprocessResponse,
+  type SegmentPointResponse,
+  cleanScene,
   compose,
   composePreview,
-  cleanScene,
+  segmentPoint,
 } from "../lib/api";
 import { toUserMessage } from "../lib/errors";
 import * as telemetry from "../lib/telemetry";
@@ -26,8 +28,40 @@ import { CanvasToolbar } from "./CanvasToolbar";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const PREVIEW_DEBOUNCE_MS = 800;
-const ERASE_COVERAGE_LIMIT = 0.2;
 const ERASE_OBJECT_OPACITY = 0.4;
+
+interface SegmentResult {
+  id: string;
+  maskUrl: string;
+  displayImage: HTMLImageElement | null;
+  bbox: number[];
+  score: number;
+}
+
+async function colorizeSegmentMask(maskUrl: string): Promise<HTMLImageElement> {
+  const maskImg = await loadImage(maskUrl);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = maskImg.naturalWidth;
+    canvas.height = maskImg.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return maskImg;
+    ctx.drawImage(maskImg, 0, 0);
+    const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const isObj = d[i] > 128;
+      d[i] = isObj ? 220 : 0;
+      d[i + 1] = isObj ? 50 : 0;
+      d[i + 2] = isObj ? 50 : 0;
+      d[i + 3] = isObj ? 150 : 0;
+    }
+    ctx.putImageData(id, 0, 0);
+    return loadImage(canvas.toDataURL("image/png"));
+  } catch {
+    return maskImg;
+  }
+}
 
 type RenderPhase = "idle" | "rendering" | "error";
 type CleanPhase = "idle" | "cleaning" | "error";
@@ -198,10 +232,12 @@ export function PlacementCanvas({
 
   // Erase mode
   const [canvasMode, setCanvasMode] = useState<"place" | "erase">("place");
-  const [selectedMaskIndices, setSelectedMaskIndices] = useState<Set<number>>(new Set());
+  const [segments, setSegments] = useState<SegmentResult[]>([]);
+  const [isSegmenting, setIsSegmenting] = useState(false);
   const [cleanPhase, setCleanPhase] = useState<CleanPhase>("idle");
   const [cleanError, setCleanError] = useState<RenderErrorInfo | null>(null);
   const cleanAbortRef = useRef<AbortController | null>(null);
+  const segmentAbortRef = useRef<AbortController | null>(null);
 
   // Move keyboard focus to the dismiss button whenever a render error appears
   // so screen reader users and keyboard-only users are landed on the alert.
@@ -309,7 +345,9 @@ export function PlacementCanvas({
       if ((e.key === "e" || e.key === "E") && !e.metaKey && !e.ctrlKey) {
         setCanvasMode((prev) => {
           if (prev === "erase") {
-            setSelectedMaskIndices(new Set());
+            segmentAbortRef.current?.abort();
+            setSegments([]);
+            setIsSegmenting(false);
             setCleanPhase("idle");
             setCleanError(null);
             return "place";
@@ -319,10 +357,12 @@ export function PlacementCanvas({
         return;
       }
 
-      // In erase mode, Escape deselects all mask regions
+      // In erase mode, Escape deselects all segments
       if (canvasMode === "erase") {
         if (e.key === "Escape") {
-          setSelectedMaskIndices(new Set());
+          segmentAbortRef.current?.abort();
+          setSegments([]);
+          setIsSegmenting(false);
           setCleanPhase("idle");
           setCleanError(null);
         }
@@ -458,38 +498,74 @@ export function PlacementCanvas({
     }, PREVIEW_DEBOUNCE_MS);
   }, [triggerPreview]);
 
-  // Safety rail: total selected area / scene pixel count
-  const exceedsSafetyRail = useMemo(() => {
-    if (selectedMaskIndices.size === 0 || !roomImage) return false;
-    const totalPixels = roomImage.naturalWidth * roomImage.naturalHeight;
-    if (totalPixels === 0) return false;
-    let selectedArea = 0;
-    for (const idx of selectedMaskIndices) {
-      selectedArea += masks[idx]?.area ?? 0;
-    }
-    return selectedArea / totalPixels > ERASE_COVERAGE_LIMIT;
-  }, [selectedMaskIndices, masks, roomImage]);
-
-  const handleMaskToggle = useCallback((idx: number) => {
-    setSelectedMaskIndices((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
-    });
-  }, []);
-
   const handleModeChange = useCallback((mode: "place" | "erase") => {
     setCanvasMode(mode);
     if (mode === "place") {
-      setSelectedMaskIndices(new Set());
+      segmentAbortRef.current?.abort();
+      setSegments([]);
+      setIsSegmenting(false);
       setCleanPhase("idle");
       setCleanError(null);
     }
   }, []);
 
+  const handleEraseClick = useCallback(
+    async (stageX: number, stageY: number) => {
+      if (!roomImage) return;
+
+      const imgX = Math.round((stageX - roomOffsetX) / scale);
+      const imgY = Math.round((stageY - roomOffsetY) / scale);
+
+      // Bounds check
+      if (imgX < 0 || imgY < 0 || imgX >= roomImage.naturalWidth || imgY >= roomImage.naturalHeight)
+        return;
+
+      // Toggle: click inside an existing segment's bbox → deselect
+      const hitIdx = segments.findIndex((s) => {
+        const [bx, by, bw, bh] = s.bbox;
+        return imgX >= bx && imgX <= bx + bw && imgY >= by && imgY <= by + bh;
+      });
+      if (hitIdx !== -1) {
+        setSegments((prev) => prev.filter((_, i) => i !== hitIdx));
+        return;
+      }
+
+      // New point: run SAM segmentation
+      segmentAbortRef.current?.abort();
+      const ac = new AbortController();
+      segmentAbortRef.current = ac;
+      setIsSegmenting(true);
+
+      try {
+        const result: SegmentPointResponse = await segmentPoint(
+          { scene_id: sceneId, x: imgX, y: imgY },
+          ac.signal
+        );
+        const displayImage = await colorizeSegmentMask(result.mask_url);
+        setSegments((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            maskUrl: result.mask_url,
+            displayImage,
+            bbox: result.bbox,
+            score: result.score,
+          },
+        ]);
+      } catch (err: unknown) {
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          setCleanPhase("error");
+          setCleanError(toUserMessage(err));
+        }
+      } finally {
+        setIsSegmenting(false);
+      }
+    },
+    [roomImage, roomOffsetX, roomOffsetY, scale, segments, sceneId]
+  );
+
   const handleClean = useCallback(async () => {
-    if (!roomImage || selectedMaskIndices.size === 0 || exceedsSafetyRail) return;
+    if (!roomImage || segments.length === 0) return;
 
     const ac = new AbortController();
     cleanAbortRef.current = ac;
@@ -497,7 +573,7 @@ export function PlacementCanvas({
     setCleanError(null);
 
     try {
-      // Build binary mask using an in-DOM canvas at scene native resolution.
+      // Union all segment masks with "screen" compositing (lightest wins, giving OR of B/W masks).
       const { naturalWidth: w, naturalHeight: h } = roomImage;
       const canvas = document.createElement("canvas");
       canvas.width = w;
@@ -506,19 +582,16 @@ export function PlacementCanvas({
       if (!ctx) throw new Error("canvas-not-supported");
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = "white";
-      for (const idx of selectedMaskIndices) {
-        const bbox = masks[idx]?.bbox;
-        if (bbox && bbox.length >= 4) {
-          const [mx, my, mw, mh] = bbox;
-          ctx.fillRect(mx, my, mw, mh);
-        }
+      ctx.globalCompositeOperation = "screen";
+      for (const seg of segments) {
+        const maskImg = await loadImage(seg.maskUrl);
+        ctx.drawImage(maskImg, 0, 0, w, h);
       }
       const maskDataUrl = canvas.toDataURL("image/png");
 
       const result = await cleanScene({ scene_id: sceneId, mask: maskDataUrl }, ac.signal);
       setCleanPhase("idle");
-      setSelectedMaskIndices(new Set());
+      setSegments([]);
       onSceneCleaned?.(result.cleaned_scene_id, result.cleaned_url);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -529,7 +602,7 @@ export function PlacementCanvas({
         setCleanError(msg);
       }
     }
-  }, [roomImage, selectedMaskIndices, exceedsSafetyRail, masks, sceneId, onSceneCleaned]);
+  }, [roomImage, segments, sceneId, onSceneCleaned]);
 
   const handleRender = useCallback(async () => {
     if (!falKeyConfigured) {
@@ -862,7 +935,7 @@ export function PlacementCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 overflow-hidden bg-gray-900 outline-none"
+      className={`relative flex-1 overflow-hidden bg-gray-900 outline-none ${canvasMode === "erase" ? (isSegmenting ? "cursor-wait" : "cursor-crosshair") : ""}`}
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       aria-label="Placement canvas"
@@ -874,12 +947,15 @@ export function PlacementCanvas({
         width={stageSize.width}
         height={stageSize.height}
         onClick={(e) => {
-          if (canvasMode === "erase") return;
+          const pos = stageRef.current?.getPointerPosition();
+          if (canvasMode === "erase") {
+            if (pos && !isSegmenting) void handleEraseClick(pos.x, pos.y);
+            return;
+          }
           const target = e.target as Konva.Node;
           const isBackground =
             typeof target.getStage === "function" && target === target.getStage();
           if (pendingObjectId && isBackground) {
-            const pos = stageRef.current?.getPointerPosition();
             if (pos) void handleClickPlace(pos.x, pos.y);
           } else if (isBackground) {
             setSelectedId(null);
@@ -957,58 +1033,46 @@ export function PlacementCanvas({
           />
         </Layer>
 
-        {/* Erase mode — SAM mask overlays */}
-        {canvasMode === "erase" && masks.length > 0 && (
-          <Layer>
-            {masks.map((mask, idx) => {
-              if (!mask.bbox || mask.bbox.length < 4) return null;
-              const [mx, my, mw, mh] = mask.bbox;
-              const selected = selectedMaskIndices.has(idx);
-              return (
-                <Rect
-                  key={idx}
-                  x={roomOffsetX + mx * scale}
-                  y={roomOffsetY + my * scale}
-                  width={mw * scale}
-                  height={mh * scale}
-                  fill={selected ? "red" : "white"}
-                  opacity={selected ? 0.45 : 0.15}
-                  stroke={selected ? "red" : "transparent"}
-                  strokeWidth={selected ? 2 : 0}
-                  listening
-                  onClick={() => handleMaskToggle(idx)}
-                  onTap={() => handleMaskToggle(idx)}
+        {/* Erase mode — colorized segment overlays */}
+        {canvasMode === "erase" && segments.length > 0 && (
+          <Layer listening={false}>
+            {segments.map((seg) =>
+              seg.displayImage ? (
+                <KonvaImage
+                  key={seg.id}
+                  image={seg.displayImage}
+                  x={roomOffsetX}
+                  y={roomOffsetY}
+                  width={roomRenderW}
+                  height={roomRenderH}
                 />
-              );
-            })}
+              ) : null
+            )}
           </Layer>
         )}
       </Stage>
 
-      {/* Erase mode — keyboard-accessible mask buttons (transparent DOM overlay over Konva stage) */}
-      {canvasMode === "erase" && masks.length > 0 && (
+      {/* Erase mode — keyboard-accessible deselect buttons positioned over each segment bbox */}
+      {canvasMode === "erase" && segments.length > 0 && (
         <div
           className="pointer-events-none absolute inset-0"
-          aria-label="Segmented regions"
+          aria-label="Selected segments"
           role="group"
         >
-          {masks.map((mask, idx) => {
-            if (!mask.bbox || mask.bbox.length < 4) return null;
-            const [mx, my, mw, mh] = mask.bbox;
-            const selected = selectedMaskIndices.has(idx);
+          {segments.map((seg, i) => {
+            const [bx, by, bw, bh] = seg.bbox;
             return (
               <button
-                key={idx}
+                key={seg.id}
                 type="button"
-                aria-label={`Region ${idx + 1}${mask.label ? ` (${mask.label})` : ""}, ${selected ? "selected" : "not selected"}`}
-                aria-pressed={selected}
-                onClick={() => handleMaskToggle(idx)}
-                className="pointer-events-auto absolute cursor-pointer opacity-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                aria-label={`Selected region ${i + 1}, click to deselect`}
+                onClick={() => setSegments((prev) => prev.filter((s) => s.id !== seg.id))}
+                className="pointer-events-auto absolute opacity-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
                 style={{
-                  left: roomOffsetX + mx * scale,
-                  top: roomOffsetY + my * scale,
-                  width: mw * scale,
-                  height: mh * scale,
+                  left: roomOffsetX + bx * scale,
+                  top: roomOffsetY + by * scale,
+                  width: bw * scale,
+                  height: bh * scale,
                 }}
               />
             );
@@ -1020,8 +1084,8 @@ export function PlacementCanvas({
       <CanvasToolbar
         mode={canvasMode}
         onModeChange={handleModeChange}
-        selectedCount={selectedMaskIndices.size}
-        exceedsSafetyRail={exceedsSafetyRail}
+        segmentCount={segments.length}
+        isSegmenting={isSegmenting}
         isCleaning={cleanPhase === "cleaning"}
         onClean={() => void handleClean()}
       />
@@ -1036,10 +1100,10 @@ export function PlacementCanvas({
       )}
 
       {/* Erase mode hint — hidden when cleaned variant pill occupies the same slot */}
-      {canvasMode === "erase" && selectedMaskIndices.size === 0 && !cleanedVariant && (
+      {canvasMode === "erase" && segments.length === 0 && !cleanedVariant && (
         <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
           <div className="rounded-full bg-black/70 px-4 py-1.5 text-xs font-medium text-white shadow backdrop-blur-sm">
-            Click a region to select it for removal
+            Click any object to select it for removal
           </div>
         </div>
       )}
@@ -1082,8 +1146,8 @@ export function PlacementCanvas({
         {previewPhase === "generating" && placements.length > 0 && "Generating preview"}
         {previewPhase === "ready" && placements.length > 0 && "Preview ready"}
         {previewPhase === "error" && placements.length > 0 && "Preview unavailable"}
+        {isSegmenting && "Segmenting object, please wait"}
         {cleanPhase === "cleaning" && "Cleaning scene, please wait"}
-        {cleanPhase === "idle" && canvasMode === "erase" && "Scene ready"}
       </div>
 
       {/* Preview status badge — top-left corner; hidden when no placements or in erase mode */}

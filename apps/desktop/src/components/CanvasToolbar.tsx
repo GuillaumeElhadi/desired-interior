@@ -1,8 +1,8 @@
 interface CanvasToolbarProps {
   mode: "place" | "erase";
   onModeChange: (mode: "place" | "erase") => void;
-  selectedCount: number;
-  exceedsSafetyRail: boolean;
+  segmentCount: number;
+  isSegmenting: boolean;
   isCleaning: boolean;
   onClean: () => void;
 }
@@ -12,16 +12,15 @@ const CLEAN_HINT_ID = "canvas-toolbar-clean-hint";
 export function CanvasToolbar({
   mode,
   onModeChange,
-  selectedCount,
-  exceedsSafetyRail,
+  segmentCount,
+  isSegmenting,
   isCleaning,
   onClean,
 }: CanvasToolbarProps) {
-  const cleanDisabled = selectedCount === 0 || exceedsSafetyRail || isCleaning;
-  const cleanHint = exceedsSafetyRail
-    ? "Selection covers >20% of the image — deselect some regions to continue"
-    : selectedCount === 0
-      ? "Select at least one region to clean"
+  const cleanDisabled = segmentCount === 0 || isSegmenting || isCleaning;
+  const cleanHint =
+    segmentCount === 0 && !isSegmenting
+      ? "Click objects in the photo to select them for removal"
       : undefined;
 
   return (
@@ -61,7 +60,7 @@ export function CanvasToolbar({
             type="button"
             disabled={cleanDisabled}
             onClick={onClean}
-            title={cleanHint ?? "Remove selected regions from the scene"}
+            title={cleanHint ?? "Remove selected objects from the scene"}
             aria-describedby={cleanHint ? CLEAN_HINT_ID : undefined}
             className="flex items-center gap-1.5 rounded bg-brand-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1 focus-visible:ring-offset-black/75"
           >
@@ -73,11 +72,19 @@ export function CanvasToolbar({
                 />
                 Cleaning…
               </>
+            ) : isSegmenting ? (
+              <>
+                <span
+                  className="inline-block h-3 w-3 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin"
+                  aria-hidden="true"
+                />
+                Selecting…
+              </>
             ) : (
               <>
-                {selectedCount > 0 && (
+                {segmentCount > 0 && (
                   <span className="rounded-full bg-white/25 px-1.5 tabular-nums">
-                    {selectedCount}
+                    {segmentCount}
                   </span>
                 )}
                 Clean

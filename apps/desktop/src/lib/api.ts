@@ -213,6 +213,22 @@ export async function postLog(body: LogRequest): Promise<void> {
 
 export type CleanSceneRequest = components["schemas"]["CleanSceneRequest"];
 export type CleanSceneResponse = components["schemas"]["CleanSceneResponse"];
+export type SegmentPointRequest = components["schemas"]["SegmentPointRequest"];
+export type SegmentPointResponse = components["schemas"]["SegmentPointResponse"];
+
+export async function segmentPoint(
+  request: SegmentPointRequest,
+  signal?: AbortSignal
+): Promise<SegmentPointResponse> {
+  const baseUrl = await getApiBaseUrl();
+  const response = await safeFetch(`${baseUrl}/scenes/segment-point`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  return response.json() as Promise<SegmentPointResponse>;
+}
 
 export async function cleanScene(
   request: CleanSceneRequest,
