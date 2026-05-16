@@ -33,7 +33,7 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80 -m 'not live'"
 testpaths = ["tests"]
 markers = [
   "live: requires live external services and FAL_KEY env var (deselect with '-m not live')",

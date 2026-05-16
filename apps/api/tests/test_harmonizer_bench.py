@@ -188,4 +188,5 @@ async def test_bench_flux_floor_single_cell() -> None:
     assert result.latency_s is not None
     assert result.latency_s <= 25.0, f"Flux p95 budget exceeded: {result.latency_s:.1f}s"
     assert result.result_url is not None
-    assert result.result_url.startswith("https://")
+    # run_harmonize now returns a data URL after re-compositing the object pixels
+    assert result.result_url.startswith(("https://", "data:image/"))
