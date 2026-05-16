@@ -47,7 +47,9 @@ export function ResultView({
   const [position, setPosition] = useState(50);
   const [mode, setMode] = useState<RenderMode>("proxy");
   const [harmonizePhase, setHarmonizePhase] = useState<HarmonizePhase>({ type: "idle" });
-  const [strength, setStrength] = useState(initialStrength ?? STRENGTH_MID);
+  const [strength, setStrength] = useState(
+    Math.max(STRENGTH_MIN, Math.min(STRENGTH_MAX, initialStrength ?? STRENGTH_MID))
+  );
   const [loadingStage, setLoadingStage] = useState<LoadingStage>("compositing");
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
@@ -285,7 +287,7 @@ export function ResultView({
         <div
           className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60"
           role="status"
-          aria-label="Harmonising"
+          aria-label="Harmonise progress"
         >
           <svg
             className="h-8 w-8 motion-safe:animate-spin text-white"
@@ -307,7 +309,9 @@ export function ResultView({
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <p className="text-sm text-white/90">{STAGE_LABEL[loadingStage]}</p>
+          <p className="text-sm text-white/90" aria-live="polite" aria-atomic="true">
+            {STAGE_LABEL[loadingStage]}
+          </p>
           <button
             ref={cancelButtonRef}
             type="button"
@@ -354,7 +358,7 @@ export function ResultView({
           cannot reach Re-render while Cancel/Retry/Back are the only valid actions */}
       <div
         ref={controlBarRef}
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-stretch gap-2 rounded-lg bg-black/75 px-4 py-2 backdrop-blur-sm"
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex max-w-sm flex-col items-stretch gap-2 rounded-lg bg-black/75 px-4 py-2 backdrop-blur-sm"
       >
         {/* Harmonize strength slider — only shown when harmonize is wired up */}
         {onHarmonize && (
@@ -375,11 +379,9 @@ export function ResultView({
                 onStrengthChange?.(v);
               }}
               disabled={isLoading}
-              className="flex-1 accent-brand-accent disabled:opacity-50"
-              aria-label="Harmonization strength"
-              title="Recommended value pending task 5.6 benchmarking — currently at midpoint"
+              className="w-32 accent-brand-accent disabled:opacity-50"
             />
-            <span className="w-8 text-right text-xs tabular-nums text-white/70">
+            <span aria-hidden="true" className="w-8 text-right text-xs tabular-nums text-white/70">
               {strength.toFixed(2)}
             </span>
           </div>
@@ -391,7 +393,7 @@ export function ResultView({
             type="button"
             onClick={onBack}
             aria-label="Back to edit"
-            className="rounded-md text-sm text-white hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/75"
+            className="rounded-md text-xs text-white hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/75"
           >
             <span aria-hidden="true">←</span> <span>Edit</span>
           </button>
