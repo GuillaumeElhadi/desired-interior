@@ -8,7 +8,7 @@ import { ResultView } from "./components/ResultView";
 import { RoomUpload, type SceneContext } from "./components/RoomUpload";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
-import { checkHealth, updateSettings } from "./lib/api";
+import { type ObjectPlacement, checkHealth, harmonize, updateSettings } from "./lib/api";
 import { toUserMessage } from "./lib/errors";
 import { loadSettings, saveSettings } from "./lib/settings";
 import * as telemetry from "./lib/telemetry";
@@ -48,6 +48,8 @@ async function waitForSidecar(signal: AbortSignal): Promise<{ version: string }>
 interface RenderResult {
   url: string;
   compositionId: string;
+  sceneId: string;
+  objects: ObjectPlacement[];
 }
 
 function App() {
@@ -59,6 +61,7 @@ function App() {
   const [falKeyConfigured, setFalKeyConfigured] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [analyticsDecided, setAnalyticsDecided] = useState(true);
+  const [harmonizeStrength, setHarmonizeStrength] = useState(0.35);
   const isOnline = useOnlineStatus();
 
   useEffect(() => {
@@ -67,9 +70,15 @@ function App() {
     // before pushing it — avoids a race where the key is sent before the
     // sidecar has bound its port.
     const init = async () => {
-      const { falKey, analyticsEnabled, anonymousId } = await loadSettings();
+      const {
+        falKey,
+        analyticsEnabled,
+        anonymousId,
+        harmonizeStrength: savedStrength,
+      } = await loadSettings();
       setFalKeyConfigured(!!falKey);
       setAnalyticsDecided(analyticsEnabled !== undefined);
+      if (savedStrength !== undefined) setHarmonizeStrength(savedStrength);
       if (analyticsEnabled !== undefined) {
         telemetry.init(analyticsEnabled, anonymousId ?? "");
       }
@@ -112,6 +121,28 @@ function App() {
     setAnalyticsDecided(true);
     loadSettings()
       .then((s) => saveSettings({ ...s, analyticsEnabled: false }))
+      .catch(console.error);
+  }, []);
+
+  const handleHarmonize = useCallback(
+    async (signal: AbortSignal, strength: number) => {
+      const response = await harmonize(
+        {
+          scene_id: renderResult!.sceneId,
+          objects: renderResult!.objects,
+          harmonize_strength: strength,
+        },
+        signal
+      );
+      return response.image.url;
+    },
+    [renderResult]
+  );
+
+  const handleStrengthChange = useCallback((s: number) => {
+    setHarmonizeStrength(s);
+    loadSettings()
+      .then((st) => saveSettings({ ...st, harmonizeStrength: s }))
       .catch(console.error);
   }, []);
 
@@ -209,6 +240,9 @@ function App() {
               resultUrl={renderResult.url}
               onBack={() => setRenderResult(null)}
               onRerender={() => setRenderResult(null)}
+              onHarmonize={handleHarmonize}
+              initialStrength={harmonizeStrength}
+              onStrengthChange={handleStrengthChange}
             />
             <ObjectPanel sceneId={sceneCtx.sceneId} />
           </>

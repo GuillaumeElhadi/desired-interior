@@ -124,14 +124,14 @@ describe("ResultView — harmonising state", () => {
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("status", { name: /harmonising/i })).toBeInTheDocument();
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument();
     });
-    expect(screen.getByText("Harmonising…")).toBeInTheDocument();
+    expect(screen.getByText("Compositing…")).toBeInTheDocument();
   });
 
   it("calls onHarmonize with an AbortSignal", async () => {
     const { promise } = deferred();
-    const onHarmonize = vi.fn((_signal: AbortSignal) => promise);
+    const onHarmonize = vi.fn((_signal: AbortSignal, _strength: number) => promise);
     render(<ResultView {...BASE_PROPS} onHarmonize={onHarmonize} />);
 
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
@@ -148,7 +148,7 @@ describe("ResultView — harmonising state", () => {
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole("status", { name: /harmonising/i })).toBeInTheDocument()
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument()
     );
 
     expect(screen.getByRole("radio", { name: /^proxy$/i })).toBeDisabled();
@@ -161,10 +161,12 @@ describe("ResultView — harmonising state", () => {
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole("status", { name: /harmonising/i })).toBeInTheDocument()
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument()
     );
 
-    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("slider", { name: /before.*after.*position/i })
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -175,7 +177,7 @@ describe("ResultView — harmonising state", () => {
 describe("ResultView — cancel", () => {
   it("Cancel button aborts the in-flight signal and returns to Proxy mode", async () => {
     const { promise } = deferred();
-    const onHarmonize = vi.fn((_signal: AbortSignal) => promise);
+    const onHarmonize = vi.fn((_signal: AbortSignal, _strength: number) => promise);
     render(<ResultView {...BASE_PROPS} onHarmonize={onHarmonize} />);
 
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
@@ -190,7 +192,7 @@ describe("ResultView — cancel", () => {
     expect(signal.aborted).toBe(true);
 
     await waitFor(() => {
-      expect(screen.queryByRole("status", { name: /harmonising/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: /harmonise progress/i })).not.toBeInTheDocument();
     });
     expect(screen.getByRole("radio", { name: /^proxy$/i })).toHaveAttribute("aria-checked", "true");
   });
@@ -366,6 +368,98 @@ describe("ResultView — harmonise failure", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Harmonize strength slider
+// ---------------------------------------------------------------------------
+
+describe("ResultView — harmonize_strength slider", () => {
+  it("does not render the strength slider when onHarmonize is absent", () => {
+    render(<ResultView {...BASE_PROPS} />);
+    expect(screen.queryByLabelText(/^strength$/i)).not.toBeInTheDocument();
+  });
+
+  it("renders the strength slider when onHarmonize is provided", () => {
+    render(<ResultView {...BASE_PROPS} onHarmonize={() => new Promise<string>(() => {})} />);
+    expect(screen.getByLabelText(/^strength$/i)).toBeInTheDocument();
+  });
+
+  it("slider starts at midpoint 0.35 when no initialStrength is given", () => {
+    render(<ResultView {...BASE_PROPS} onHarmonize={() => new Promise<string>(() => {})} />);
+    const slider = screen.getByLabelText(/^strength$/i);
+    expect(Number((slider as HTMLInputElement).value)).toBeCloseTo(0.35);
+  });
+
+  it("slider starts at initialStrength when provided", () => {
+    render(
+      <ResultView
+        {...BASE_PROPS}
+        onHarmonize={() => new Promise<string>(() => {})}
+        initialStrength={0.42}
+      />
+    );
+    const slider = screen.getByLabelText(/^strength$/i);
+    expect(Number((slider as HTMLInputElement).value)).toBeCloseTo(0.42);
+  });
+
+  it("changing the slider calls onStrengthChange with the new value", () => {
+    const onStrengthChange = vi.fn();
+    render(
+      <ResultView
+        {...BASE_PROPS}
+        onHarmonize={() => new Promise<string>(() => {})}
+        onStrengthChange={onStrengthChange}
+      />
+    );
+    const slider = screen.getByLabelText(/^strength$/i);
+    fireEvent.change(slider, { target: { value: "0.45" } });
+    expect(onStrengthChange).toHaveBeenCalledWith(0.45);
+  });
+
+  it("onHarmonize receives the current strength as second argument", async () => {
+    const onHarmonize = vi.fn(() => new Promise<string>(() => {}));
+    render(<ResultView {...BASE_PROPS} onHarmonize={onHarmonize} initialStrength={0.28} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
+
+    await waitFor(() => expect(onHarmonize).toHaveBeenCalledOnce());
+    const [, receivedStrength] = onHarmonize.mock.calls[0] as unknown as [AbortSignal, number];
+    expect(receivedStrength).toBeCloseTo(0.28);
+  });
+
+  it("slider is disabled while harmonising", async () => {
+    render(<ResultView {...BASE_PROPS} onHarmonize={() => new Promise<string>(() => {})} />);
+    fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument()
+    );
+
+    expect(screen.getByLabelText(/^strength$/i)).toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Staged progress labels
+// ---------------------------------------------------------------------------
+
+describe("ResultView — staged progress", () => {
+  it("shows a progress label while harmonising", async () => {
+    render(<ResultView {...BASE_PROPS} onHarmonize={() => new Promise<string>(() => {})} />);
+    fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument()
+    );
+
+    // The loading overlay shows one of the three staged labels
+    const overlay = screen.getByRole("status", { name: /harmonise progress/i });
+    const text = overlay.textContent ?? "";
+    expect(
+      text.includes("Compositing") || text.includes("Building mask") || text.includes("Harmonising")
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Race condition guard
 // ---------------------------------------------------------------------------
 
@@ -384,19 +478,19 @@ describe("ResultView — race condition guard", () => {
     // First call — goes to loading
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
     await waitFor(() =>
-      expect(screen.getByRole("status", { name: /harmonising/i })).toBeInTheDocument()
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument()
     );
 
     // Cancel first call (increments generation, switches back to proxy)
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     await waitFor(() =>
-      expect(screen.queryByRole("status", { name: /harmonising/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole("status", { name: /harmonise progress/i })).not.toBeInTheDocument()
     );
 
     // Second call
     fireEvent.click(screen.getByRole("radio", { name: /^harmonize$/i }));
     await waitFor(() =>
-      expect(screen.getByRole("status", { name: /harmonising/i })).toBeInTheDocument()
+      expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument()
     );
 
     // Resolve the stale first promise — should be ignored
@@ -405,7 +499,7 @@ describe("ResultView — race condition guard", () => {
     });
 
     // State should still be loading (not success with stale url)
-    expect(screen.getByRole("status", { name: /harmonising/i })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /harmonise progress/i })).toBeInTheDocument();
     expect(screen.queryByAltText("After")).not.toBeInTheDocument();
 
     // Resolve the valid second promise

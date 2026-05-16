@@ -520,14 +520,14 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.5 Harmonize flow in the UI (UI track)
 
-- [ ] Branch: `feat/harmonize-flow`
+- [x] Branch: `feat/harmonize-flow`
 - Wire the toggle from 5.2 to the endpoint from 5.4. Show staged progress ("compositing → masking → harmonising"). Surface a `harmonize_strength` slider directly in the result view, clamped to the backend's `[0.15, 0.55]` range. **No default value is pre-selected until task 5.6 produces one** — the slider sits at its midpoint with a tooltip pointing to the bench task. Persist last-used strength per project in the settings store.
 - **Files:** `apps/desktop/src/components/ResultView.tsx`, `apps/desktop/src/lib/api.ts`, `apps/desktop/src/lib/settingsStore.ts`.
 - **Acceptance:**
-  - [ ] Happy path: click Harmonize → spinner → harmonised image appears, before/after slider compares to proxy
-  - [ ] Cancel mid-harmonise aborts the request server-side (verified in test)
-  - [ ] Errors from 5.4 are mapped via the matrix from task 4.3
-  - [ ] `design-reviewer` agent approves the layout and a11y of the new controls
+  - [x] Happy path: click Harmonize → spinner → harmonised image appears, before/after slider compares to proxy
+  - [x] Cancel mid-harmonise aborts the request server-side (verified in test)
+  - [x] Errors from 5.4 are mapped via the matrix from task 4.3
+  - [x] `design-reviewer` agent approves the layout and a11y of the new controls
 
 ### 5.6 Harmonizer quality + latency tuning (AI polish track)
 
