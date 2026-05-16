@@ -338,3 +338,47 @@ jobs:
         if: hashFiles('apps/desktop/src-tauri/Cargo.toml') != ''
         working-directory: apps/desktop
         run: pnpm tauri build --debug
+
+  # ---------------------------------------------------------------------------
+  # run-bench: Harmonizer A/B benchmark — only on PRs labelled 'run-bench'
+  # Produces a CSV + contact-sheet PNG uploaded as an artifact.
+  # ---------------------------------------------------------------------------
+  run-bench:
+    name: Harmonizer A/B Bench
+    runs-on: macos-14
+    if: >
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'run-bench')
+    needs: [test-backend]
+    env:
+      FAL_KEY: ${{ secrets.FAL_KEY }}
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run bench (live cells)
+        run: uv run pytest -m "bench and live" --no-cov -v
+
+      - name: Run full bench script
+        run: |
+          mkdir -p ../../docs/bench-results
+          uv run python scripts/harmonizer_bench.py \
+            --output-dir ../../docs/bench-results \
+            --backends flux
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harmonizer-bench-results
+          path: docs/bench-results/
