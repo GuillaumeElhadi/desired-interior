@@ -62,6 +62,63 @@
         }
       }
     },
+    "/scenes/clean": {
+      "post": {
+        "tags": ["scenes"],
+        "summary": "Clean Scene",
+        "operationId": "clean_scene_scenes_clean_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanSceneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanSceneResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/objects/extract": {
       "post": {
         "tags": ["objects"],
@@ -499,6 +556,55 @@
         "type": "object",
         "required": ["x", "y", "width", "height"],
         "title": "BoundingBox"
+      },
+      "CleanSceneRequest": {
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "title": "Scene Id"
+          },
+          "mask": {
+            "type": "string",
+            "maxLength": 30000000,
+            "title": "Mask"
+          },
+          "prompt_hint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "pattern": "^[\\w\\s,\\.\\-'\\\"!?()]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Hint"
+          }
+        },
+        "type": "object",
+        "required": ["scene_id", "mask"],
+        "title": "CleanSceneRequest"
+      },
+      "CleanSceneResponse": {
+        "properties": {
+          "cleaned_scene_id": {
+            "type": "string",
+            "title": "Cleaned Scene Id"
+          },
+          "cleaned_url": {
+            "type": "string",
+            "title": "Cleaned Url"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "default": "image/jpeg"
+          }
+        },
+        "type": "object",
+        "required": ["cleaned_scene_id", "cleaned_url"],
+        "title": "CleanSceneResponse"
       },
       "ComposeRequest": {
         "properties": {

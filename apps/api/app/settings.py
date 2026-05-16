@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     fal_max_retries: int = 3
     bg_removal_backend: Literal["birefnet", "bria"] = "birefnet"
     harmonizer_backend: Literal["flux", "sdxl"] = "flux"
+    scene_clean_backend: Literal["lama", "flux"] = "lama"
 
     model_config = SettingsConfigDict(
         env_file=".env.local",
