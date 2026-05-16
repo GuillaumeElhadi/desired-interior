@@ -6,6 +6,7 @@ from here — never the SDK directly.
 """
 
 import asyncio
+import base64
 from typing import Any
 
 import fal_client as _fal_sdk
@@ -91,13 +92,28 @@ class AsyncFalClient:
     _MAX_FETCH_BYTES = 50 * 1024 * 1024  # 50 MB
 
     async def fetch_bytes(self, url: str) -> bytes:
-        """Download raw bytes from a fal.ai CDN URL.
+        """Download raw bytes from a fal.ai CDN URL or decode an inline data URL.
 
         Validates scheme (https only) and host suffix (`.fal.ai` / `.fal.run` /
         `.fal.media`) before connecting to prevent SSRF. Streams the response
         body and aborts as soon as the 50 MB cap is crossed, so a hostile or
         misbehaving server cannot force us to buffer multi-GB payloads.
+
+        Data URLs (`data:<mime>;base64,<content>`) are decoded inline — used by
+        the bench harness and tests that pass images as base64 instead of CDN URLs.
         """
+        if url.startswith("data:"):
+            try:
+                _, encoded = url.split(",", 1)
+                decoded = base64.b64decode(encoded, validate=True)
+            except Exception as exc:
+                raise FalMalformedResponseError("fetch_bytes: malformed data URL") from exc
+            if len(decoded) > self._MAX_FETCH_BYTES:
+                raise FalMalformedResponseError(
+                    f"fetch_bytes: data URL exceeds {self._MAX_FETCH_BYTES} bytes"
+                )
+            return decoded
+
         parsed = httpx.URL(url)
         if parsed.scheme != "https" or not any(
             parsed.host.endswith(h) for h in self._ALLOWED_HOSTS

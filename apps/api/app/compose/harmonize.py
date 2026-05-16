@@ -23,11 +23,13 @@ import io
 from typing import Any
 
 import structlog
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageFilter
 
 from app.cloud.fal_client import AsyncFalClient, FalMalformedResponseError
 from app.compose.composition import run_composition
 from app.schemas import ObjectPlacement, PlacementSpec, StyleHints
+
+Image.MAX_IMAGE_PIXELS = 40_000_000
 
 _FAL_CDN_HOSTS = (".fal.ai", ".fal.run", ".fal.media")
 
@@ -52,6 +54,16 @@ _CONTROLNET_DEFAULT_WEIGHT: float = 0.45
 
 # HuggingFace path for the FLUX.1-dev ControlNet Depth LoRA used by fal-ai/flux-pro/v1/fill.
 _CONTROLNET_DEPTH_PATH = "InstantX/FLUX.1-dev-Controlnet-Depth"
+
+
+def _build_harmonize_mask(object_mask: Image.Image, halo_px: int = 32) -> Image.Image:
+    """Convert a binary object mask to a halo mask for flux-pro/v1/fill.
+
+    white (255) = halo_px-wide ring around the object boundary → model blends here
+    black (0)   = object interior + far background → both preserved
+    """
+    dilated = object_mask.filter(ImageFilter.MaxFilter(size=2 * halo_px + 1))
+    return ImageChops.subtract(dilated, object_mask)
 
 
 def make_harmonize_cache_key(
@@ -133,8 +145,9 @@ async def run_harmonize(
     # Encode final composite and union mask as data URLs
     composite_data_url = f"data:image/jpeg;base64,{base64.b64encode(current_bytes).decode()}"
 
+    harmonize_mask = _build_harmonize_mask(union_mask)  # type: ignore[arg-type]
     mask_buf = io.BytesIO()
-    union_mask.save(mask_buf, format="PNG")  # type: ignore[union-attr]
+    harmonize_mask.save(mask_buf, format="PNG")
     mask_data_url = f"data:image/png;base64,{base64.b64encode(mask_buf.getvalue()).decode()}"
 
     # 2. Build fal.ai arguments (shared between backends)
@@ -178,9 +191,6 @@ async def run_harmonize(
 
     harmonized_url = str(images[0]["url"])
 
-    # Validate the returned URL against the fal.ai CDN allowlist — same guard
-    # used for depth_map_url — to prevent SSRF if a misconfigured backend returns
-    # an attacker-controlled host.
     if not harmonized_url.startswith("https://"):
         raise FalMalformedResponseError(f"{endpoint!r} returned a non-HTTPS harmonized URL")
     host = harmonized_url.split("/")[2]
@@ -189,5 +199,22 @@ async def run_harmonize(
             f"{endpoint!r} returned a harmonized URL from untrusted host {host!r}"
         )
 
+    # Download the harmonized image and paste original object pixels back on top.
+    # Flux Fill regenerates its masked region from scratch rather than blending
+    # softly, so the object area blurs even with a halo mask. Re-compositing the
+    # original composite's object pixels guarantees pixel-perfect preservation
+    # while the model's output provides the blended transition zone.
+    harmonized_bytes = await fal.fetch_bytes(harmonized_url)
+    harmonized_img = Image.open(io.BytesIO(harmonized_bytes)).convert("RGB")
+    composite_img = Image.open(io.BytesIO(current_bytes)).convert("RGB")
+    if harmonized_img.size != composite_img.size:
+        composite_img = composite_img.resize(harmonized_img.size, Image.LANCZOS)
+        union_mask = union_mask.resize(harmonized_img.size, Image.NEAREST)  # type: ignore[union-attr]
+    harmonized_img.paste(composite_img, mask=union_mask)  # type: ignore[arg-type]
+
+    result_buf = io.BytesIO()
+    harmonized_img.save(result_buf, format="JPEG", quality=92)
+    result_data_url = f"data:image/jpeg;base64,{base64.b64encode(result_buf.getvalue()).decode()}"
+
     _log.info("harmonize_done", backend=backend, url=harmonized_url[:80])
-    return {"url": harmonized_url, "content_type": "image/jpeg"}
+    return {"url": result_data_url, "content_type": "image/jpeg"}

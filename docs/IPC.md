@@ -158,13 +158,13 @@ Calling `POST /settings` with a `fal_key` rebuilds the fal.ai client immediately
 {
   "harmonize_id": "<SHA-256 cache key covering all inputs>",
   "image": {
-    "url": "https://cdn.fal.ai/<harmonised image path>",
+    "url": "data:image/jpeg;base64,<base64-encoded JPEG bytes>",
     "content_type": "image/jpeg"
   }
 }
 ```
 
-The `image.url` is an HTTPS CDN URL returned by fal.ai (validated against `*.fal.ai / *.fal.run / *.fal.media` — same allowlist as `ComposeResponse.depth_map_url`). Unlike `/compose`, the harmonized image is not returned as a `data:` URL.
+The `image.url` is a `data:image/jpeg;base64,…` data URL. After receiving the fal.ai CDN result, the sidecar downloads the harmonised image and re-composites the original object pixels on top (to guarantee pixel-perfect object preservation regardless of the inpainting model's denoising schedule), then encodes the final JPEG as a data URL. The intermediate CDN URL is validated against `*.fal.ai / *.fal.run / *.fal.media` before the download.
 
 **Primary pipeline**: Flux Fill img2img at `fal-ai/flux-pro/v1/fill` with the PIL composite and union mask. **SDXL fallback**: `fal-ai/stable-diffusion-xl-inpainting`, engaged when `HARMONIZER_BACKEND=sdxl` (never the default). Both backends receive the same `strength` and optional `seed`. ControlNet Depth wiring and prompt tuning are finalised in task 5.6.
 

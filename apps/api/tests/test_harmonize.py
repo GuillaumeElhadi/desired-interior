@@ -146,9 +146,14 @@ def test_harmonize_cache_miss_returns_none(tmp_harmonize_cache: Path) -> None:
 
 
 def test_harmonize_cache_save_and_hit(tmp_harmonize_cache: Path) -> None:
+    # Cache now stores JPEG bytes in result.jpg and reconstructs the data URL on load.
+    import base64
+
+    raw = _make_jpeg()
+    data_url = f"data:image/jpeg;base64,{base64.b64encode(raw).decode()}"
     data = {
         "harmonize_id": "xyz",
-        "image": {"url": "https://cdn.fal.ai/h.jpg", "content_type": "image/jpeg"},
+        "image": {"url": data_url, "content_type": "image/jpeg"},
     }
     harmonize_cache_module.save_cached("xyz", data)
     assert harmonize_cache_module.load_cached("xyz") == data
@@ -275,7 +280,10 @@ async def test_harmonize_returns_image_url(
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["image"]["url"] == "https://cdn.fal.ai/harmonized.jpg"
+    # run_harmonize now downloads the model output and re-composites the original
+    # object pixels on top, returning a data URL instead of the raw CDN URL.
+    assert data["image"]["url"].startswith("data:image/jpeg;base64,")
+    assert data["image"]["content_type"] == "image/jpeg"
     assert data["harmonize_id"]
     mock_fal.run.assert_awaited_once()
 
@@ -294,11 +302,15 @@ async def test_harmonize_cache_hit_skips_fal(
     cache_key = make_harmonize_cache_key(
         _SCENE_ID, ops, get_settings().harmonizer_backend, 0.35, None
     )
+    import base64
+
+    cached_raw = _make_jpeg()
+    cached_data_url = f"data:image/jpeg;base64,{base64.b64encode(cached_raw).decode()}"
     harmonize_cache_module.save_cached(
         cache_key,
         {
             "harmonize_id": cache_key,
-            "image": {"url": "https://cdn.fal.ai/cached.jpg", "content_type": "image/jpeg"},
+            "image": {"url": cached_data_url, "content_type": "image/jpeg"},
         },
     )
 
@@ -306,7 +318,7 @@ async def test_harmonize_cache_hit_skips_fal(
         resp = await c.post("/compose/harmonize", json=_VALID_BODY)
 
     assert resp.status_code == 200
-    assert resp.json()["image"]["url"] == "https://cdn.fal.ai/cached.jpg"
+    assert resp.json()["image"]["url"].startswith("data:image/jpeg;base64,")
     mock_fal.run.assert_not_awaited()
 
 
