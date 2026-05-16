@@ -161,6 +161,38 @@ class PreviewComposeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Harmonizer (task 5.4)
+# ---------------------------------------------------------------------------
+
+
+class ObjectPlacement(BaseModel):
+    object_id: str
+    placement: PlacementSpec
+
+    @field_validator("object_id")
+    @classmethod
+    def validate_sha256_id(cls, v: str) -> str:
+        return _validate_sha256(v)
+
+
+class HarmonizeRequest(BaseModel):
+    scene_id: str
+    objects: Annotated[list[ObjectPlacement], Field(min_length=1, max_length=20)]
+    harmonize_strength: Annotated[float, Field(ge=0.15, le=0.55)]
+    seed: Annotated[int, Field(ge=0, le=2**32 - 1)] | None = None
+
+    @field_validator("scene_id")
+    @classmethod
+    def validate_sha256_id(cls, v: str) -> str:
+        return _validate_sha256(v)
+
+
+class HarmonizeResponse(BaseModel):
+    harmonize_id: str
+    image: ComposedImage
+
+
+# ---------------------------------------------------------------------------
 # Settings (task 4.2)
 # ---------------------------------------------------------------------------
 
