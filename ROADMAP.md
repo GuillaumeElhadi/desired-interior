@@ -44,7 +44,7 @@ Tauri (Rust)  ──spawn/manage──▶  FastAPI sidecar (Python 3.12)
                            Moondream, Flux Fill, SDXL, ControlNet)
 ```
 
-Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnelled through `apps/api/app/cloud/fal_client.py`; no fal SDK import is allowed elsewhere (`architecture-keeper` agent enforces). Related ADRs: [0003 sidecar packaging](docs/adr/0003-sidecar-packaging.md), [0006 canvas library](docs/adr/0006-canvas-library.md), [0007 PIL proxy over Flux Fill](docs/adr/0007-pil-compositing-over-flux-fill.md). A new ADR-0008 will document the Harmonizer trade-offs (see task 5.7).
+Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnelled through `apps/api/app/cloud/fal_client.py`; no fal SDK import is allowed elsewhere (`architecture-keeper` agent enforces). Related ADRs: [0003 sidecar packaging](docs/adr/0003-sidecar-packaging.md), [0006 canvas library](docs/adr/0006-canvas-library.md), [0007 PIL proxy over Flux Fill](docs/adr/0007-pil-compositing-over-flux-fill.md), [0008 AI Harmonizer pipeline](docs/adr/0008-ai-harmonizer.md).
 
 ---
 
@@ -542,12 +542,12 @@ Cloud-only ML is intentional in V1 — see ADR-0003. All fal.ai access is funnel
 
 ### 5.7 ADR-0008 — AI Harmonizer pipeline (AI polish track)
 
-- [ ] Branch: `docs/adr-0008-harmonizer`
+- [x] Branch: `docs/adr-0008-harmonizer`
 - Document: why a second generative pass is reintroduced after ADR-0007, the proxy-then-harmonize contract (object identity preserved by low strength + mask), the chosen backend(s) and tuning, and the boundary with `app/cloud/fal_client.py`. Reference task 5.6 results.
 - **Acceptance:**
-  - [ ] ADR file present at `docs/adr/0008-ai-harmonizer.md`
-  - [ ] Cross-linked from ADR-0007 and from the "Vision technique" section of this file
-  - [ ] `architecture-keeper` agent reviews and accepts
+  - [x] ADR file present at `docs/adr/0008-ai-harmonizer.md`
+  - [x] Cross-linked from ADR-0007 and from the "Vision technique" section of this file
+  - [x] `architecture-keeper` agent reviews and accepts
 
 ### 5.8 Scene cleanup endpoint — inpainting-based erase (Scene cleanup track)
 
