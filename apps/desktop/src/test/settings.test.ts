@@ -61,6 +61,21 @@ describe("loadSettings", () => {
     const result = await loadSettings();
     expect(result.anonymousId).toBe("test-uuid-1234");
   });
+
+  it("returns harmonizeStrength from the store", async () => {
+    mockStore.get.mockImplementation((key: string) => {
+      if (key === "harmonize_strength") return Promise.resolve(0.4);
+      return Promise.resolve(null);
+    });
+    const result = await loadSettings();
+    expect(result.harmonizeStrength).toBe(0.4);
+  });
+
+  it("returns undefined for harmonizeStrength when not set", async () => {
+    mockStore.get.mockResolvedValue(null);
+    const result = await loadSettings();
+    expect(result.harmonizeStrength).toBeUndefined();
+  });
 });
 
 describe("saveSettings", () => {
@@ -88,6 +103,21 @@ describe("saveSettings", () => {
       (c: unknown[]) => c[0]
     );
     expect(calls).not.toContain("analytics_enabled");
+  });
+
+  it("persists harmonize_strength when provided", async () => {
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.save.mockResolvedValue(undefined);
+    await saveSettings({ falKey: "", harmonizeStrength: 0.42 });
+    expect(mockStore.set).toHaveBeenCalledWith("harmonize_strength", 0.42);
+  });
+
+  it("does not write harmonize_strength when undefined", async () => {
+    mockStore.set.mockResolvedValue(undefined);
+    mockStore.save.mockResolvedValue(undefined);
+    await saveSettings({ falKey: "" });
+    const keys = (mockStore.set as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0]);
+    expect(keys).not.toContain("harmonize_strength");
   });
 
   it("can be called multiple times (cached store path)", async () => {

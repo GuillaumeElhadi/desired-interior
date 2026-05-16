@@ -362,10 +362,14 @@ describe("PlacementCanvas — render flow", () => {
     await screen.findByTestId(`node-${PLACEMENT_ID}`);
     fireEvent.click(screen.getByRole("button", { name: /render/i }));
     await waitFor(() => {
-      expect(onRenderComplete).toHaveBeenCalledWith({
-        url: COMPOSE_RESPONSE.image.url,
-        compositionId: COMPOSE_RESPONSE.composition_id,
-      });
+      expect(onRenderComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: COMPOSE_RESPONSE.image.url,
+          compositionId: COMPOSE_RESPONSE.composition_id,
+          sceneId: SCENE_ID,
+          objects: expect.arrayContaining([expect.objectContaining({ object_id: OBJECT_ID })]),
+        })
+      );
     });
   });
 

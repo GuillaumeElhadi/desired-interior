@@ -1,7 +1,13 @@
 import Konva from "konva";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
-import { type ComposeResponse, type PreprocessResponse, compose, composePreview } from "../lib/api";
+import {
+  type ComposeResponse,
+  type ObjectPlacement,
+  type PreprocessResponse,
+  compose,
+  composePreview,
+} from "../lib/api";
 import { toUserMessage } from "../lib/errors";
 import * as telemetry from "../lib/telemetry";
 import {
@@ -31,6 +37,8 @@ type PreviewPhase = "idle" | "pending" | "generating" | "ready" | "error";
 interface RenderResult {
   url: string;
   compositionId: string;
+  sceneId: string;
+  objects: ObjectPlacement[];
 }
 
 interface PlacementCanvasProps {
@@ -451,7 +459,31 @@ export function PlacementCanvas({
       });
       telemetry.renderCompleted(performance.now() - t0);
       setRenderPhase("idle");
-      onRenderComplete?.({ url: result.image.url, compositionId: result.composition_id });
+      const objects: ObjectPlacement[] = placements.flatMap((p) => {
+        const e = objectsMap.get(p.object_id);
+        if (!e) return [];
+        return [
+          {
+            object_id: p.object_id,
+            placement: {
+              bbox: {
+                x: (p.x - roomOffsetX) / scale,
+                y: (p.y - roomOffsetY) / scale,
+                width: (e.image.naturalWidth * p.scale_x) / scale,
+                height: (e.image.naturalHeight * p.scale_y) / scale,
+              },
+              depth_hint: p.depth_hint,
+              rotation: p.rotation,
+            },
+          },
+        ];
+      });
+      onRenderComplete?.({
+        url: result.image.url,
+        compositionId: result.composition_id,
+        sceneId,
+        objects,
+      });
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
         setRenderPhase("idle");

@@ -4,6 +4,7 @@ export interface AppSettings {
   falKey: string;
   analyticsEnabled?: boolean;
   anonymousId?: string;
+  harmonizeStrength?: number;
 }
 
 const DEFAULTS: AppSettings = { falKey: "" };
@@ -20,7 +21,13 @@ export async function loadSettings(): Promise<AppSettings> {
   const falKey = (await s.get<string>("fal_key")) ?? DEFAULTS.falKey;
   const analyticsEnabled = (await s.get<boolean | null>("analytics_enabled")) ?? undefined;
   const anonymousId = (await s.get<string | null>("anonymous_id")) ?? undefined;
-  return { falKey, analyticsEnabled: analyticsEnabled ?? undefined, anonymousId };
+  const harmonizeStrength = (await s.get<number | null>("harmonize_strength")) ?? undefined;
+  return {
+    falKey,
+    analyticsEnabled: analyticsEnabled ?? undefined,
+    anonymousId,
+    harmonizeStrength,
+  };
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
@@ -31,6 +38,9 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   }
   if (settings.anonymousId !== undefined) {
     await s.set("anonymous_id", settings.anonymousId);
+  }
+  if (settings.harmonizeStrength !== undefined) {
+    await s.set("harmonize_strength", settings.harmonizeStrength);
   }
   await s.save();
 }

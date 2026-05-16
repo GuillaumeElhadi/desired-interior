@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toUserMessage, type UserMessage } from "../lib/errors";
 
+const STRENGTH_MIN = 0.15;
+const STRENGTH_MAX = 0.55;
+const STRENGTH_MID = 0.35; // real default ships after task 5.6 benchmarking
+
 type HarmonizePhase =
   | { type: "idle" }
   | { type: "loading" }
@@ -9,16 +13,26 @@ type HarmonizePhase =
 
 type RenderMode = "proxy" | "harmonize";
 
+type LoadingStage = "compositing" | "masking" | "harmonising";
+
+const STAGE_LABEL: Record<LoadingStage, string> = {
+  compositing: "Compositing…",
+  masking: "Building mask…",
+  harmonising: "Harmonising…",
+};
+
 interface ResultViewProps {
   originalUrl: string;
   resultUrl: string;
   onBack: () => void;
   onRerender: () => void;
   /** Called when the user triggers a harmonise pass. Receives an AbortSignal
-   *  so the caller can cancel in-flight work. Resolves with the harmonised
-   *  image URL (data URL or CDN URL). Optional: when absent the Harmonize
-   *  toggle is rendered but disabled (wired in task 5.5). */
-  onHarmonize?: (signal: AbortSignal) => Promise<string>;
+   *  and the current strength value. Resolves with the harmonised image URL. */
+  onHarmonize?: (signal: AbortSignal, strength: number) => Promise<string>;
+  /** Last-persisted strength; defaults to midpoint when absent. */
+  initialStrength?: number;
+  /** Called whenever the slider moves so the caller can persist the value. */
+  onStrengthChange?: (strength: number) => void;
 }
 
 export function ResultView({
@@ -27,10 +41,14 @@ export function ResultView({
   onBack,
   onRerender,
   onHarmonize,
+  initialStrength,
+  onStrengthChange,
 }: ResultViewProps) {
   const [position, setPosition] = useState(50);
   const [mode, setMode] = useState<RenderMode>("proxy");
   const [harmonizePhase, setHarmonizePhase] = useState<HarmonizePhase>({ type: "idle" });
+  const [strength, setStrength] = useState(initialStrength ?? STRENGTH_MID);
+  const [loadingStage, setLoadingStage] = useState<LoadingStage>("compositing");
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -54,6 +72,20 @@ export function ResultView({
     setPosition(clamp(((e.clientX - rect.left) / rect.width) * 100));
   };
 
+  const isLoading = harmonizePhase.type === "loading";
+
+  // Advance the staged progress label while a harmonise call is in-flight.
+  // Stage is reset to "compositing" in startHarmonize before loading begins.
+  useEffect(() => {
+    if (!isLoading) return;
+    const t1 = setTimeout(() => setLoadingStage("masking"), 1500);
+    const t2 = setTimeout(() => setLoadingStage("harmonising"), 3000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isLoading]);
+
   const startHarmonize = useCallback(() => {
     if (!onHarmonize) return;
     // Abort any in-flight request before starting a new one.
@@ -62,10 +94,11 @@ export function ResultView({
     abortRef.current = controller;
     const gen = ++genRef.current;
 
+    setLoadingStage("compositing"); // reset before timers in the effect advance it
     setMode("harmonize");
     setHarmonizePhase({ type: "loading" });
 
-    onHarmonize(controller.signal).then(
+    onHarmonize(controller.signal, strength).then(
       (url) => {
         if (genRef.current !== gen) return; // stale response — discard
         // Reject URLs that are not safe image sources to prevent XSS via a
@@ -90,7 +123,7 @@ export function ResultView({
         setHarmonizePhase({ type: "failure", message: toUserMessage(err) });
       }
     );
-  }, [onHarmonize]);
+  }, [onHarmonize, strength]);
 
   const handleModeSelect = useCallback(
     (next: RenderMode) => {
@@ -113,7 +146,6 @@ export function ResultView({
     [harmonizePhase.type, onHarmonize, startHarmonize]
   );
 
-  const isLoading = harmonizePhase.type === "loading";
   const isFailure = mode === "harmonize" && harmonizePhase.type === "failure";
   const showHarmonizeCompare = mode === "harmonize" && harmonizePhase.type === "success";
 
@@ -160,7 +192,7 @@ export function ResultView({
       role="region"
       aria-label="Render result"
       onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest("button")) return;
+        if ((e.target as HTMLElement).closest("button,input")) return;
         if (overlayActive) return;
         isDragging.current = true;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -275,7 +307,7 @@ export function ResultView({
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <p className="text-sm text-white/90">Harmonising…</p>
+          <p className="text-sm text-white/90">{STAGE_LABEL[loadingStage]}</p>
           <button
             ref={cancelButtonRef}
             type="button"
@@ -322,64 +354,96 @@ export function ResultView({
           cannot reach Re-render while Cancel/Retry/Back are the only valid actions */}
       <div
         ref={controlBarRef}
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-lg bg-black/75 px-4 py-2 backdrop-blur-sm"
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-stretch gap-2 rounded-lg bg-black/75 px-4 py-2 backdrop-blur-sm"
       >
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to edit"
-          className="rounded-md text-sm text-white hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/75"
-        >
-          <span aria-hidden="true">←</span> <span>Edit</span>
-        </button>
-
-        {/* Render mode toggle */}
-        <div
-          role="radiogroup"
-          aria-label="Render mode"
-          className="flex items-center rounded-md bg-white/10 p-0.5"
-        >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === "proxy"}
-            onClick={() => handleModeSelect("proxy")}
-            disabled={isLoading}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
-              mode === "proxy" ? "bg-white text-gray-900" : "text-white/80 hover:text-white"
-            }`}
-          >
-            Proxy
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === "harmonize"}
-            onClick={() => handleModeSelect("harmonize")}
-            disabled={isLoading || !onHarmonize}
-            aria-describedby={!onHarmonize ? "harmonize-unavailable-hint" : undefined}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
-              mode === "harmonize" ? "bg-white text-gray-900" : "text-white/80 hover:text-white"
-            }`}
-          >
-            Harmonize
-          </button>
-        </div>
-
-        {/* Visually hidden description for the disabled Harmonize button */}
-        {!onHarmonize && (
-          <span id="harmonize-unavailable-hint" className="sr-only">
-            Harmonize will be available in a future update
-          </span>
+        {/* Harmonize strength slider — only shown when harmonize is wired up */}
+        {onHarmonize && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="harmonize-strength" className="shrink-0 text-xs text-white/70">
+              Strength
+            </label>
+            <input
+              id="harmonize-strength"
+              type="range"
+              min={STRENGTH_MIN}
+              max={STRENGTH_MAX}
+              step={0.01}
+              value={strength}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setStrength(v);
+                onStrengthChange?.(v);
+              }}
+              disabled={isLoading}
+              className="flex-1 accent-brand-accent disabled:opacity-50"
+              aria-label="Harmonization strength"
+              title="Recommended value pending task 5.6 benchmarking — currently at midpoint"
+            />
+            <span className="w-8 text-right text-xs tabular-nums text-white/70">
+              {strength.toFixed(2)}
+            </span>
+          </div>
         )}
 
-        <button
-          type="button"
-          onClick={onRerender}
-          className="rounded-lg bg-brand-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
-        >
-          Re-render
-        </button>
+        {/* Main control row */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to edit"
+            className="rounded-md text-sm text-white hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/75"
+          >
+            <span aria-hidden="true">←</span> <span>Edit</span>
+          </button>
+
+          {/* Render mode toggle */}
+          <div
+            role="radiogroup"
+            aria-label="Render mode"
+            className="flex items-center rounded-md bg-white/10 p-0.5"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "proxy"}
+              onClick={() => handleModeSelect("proxy")}
+              disabled={isLoading}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                mode === "proxy" ? "bg-white text-gray-900" : "text-white/80 hover:text-white"
+              }`}
+            >
+              Proxy
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "harmonize"}
+              onClick={() => handleModeSelect("harmonize")}
+              disabled={isLoading || !onHarmonize}
+              aria-describedby={!onHarmonize ? "harmonize-unavailable-hint" : undefined}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                mode === "harmonize" ? "bg-white text-gray-900" : "text-white/80 hover:text-white"
+              }`}
+            >
+              Harmonize
+            </button>
+          </div>
+
+          {/* Visually hidden description for the disabled Harmonize button */}
+          {!onHarmonize && (
+            <span id="harmonize-unavailable-hint" className="sr-only">
+              Harmonize will be available in a future update
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={onRerender}
+            className="rounded-lg bg-brand-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
+          >
+            Re-render
+          </button>
+        </div>
       </div>
     </div>
   );
